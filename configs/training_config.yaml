@@ -1,0 +1,124 @@
+# Training Configuration for Mini-R1 GRPO
+# Optimized for single GPU (12-16GB VRAM)
+
+# Model Configuration
+model:
+  name: "Qwen/Qwen2.5-1.5B-Instruct"  # Use 1.5B for better GPU efficiency, or "Qwen/Qwen2.5-3B-Instruct"
+  torch_dtype: "bfloat16"
+  attn_implementation: "flash_attention_2"  # Requires flash-attn package
+  use_peft: true
+  load_in_4bit: true  # QLoRA for memory efficiency
+
+# PEFT/LoRA Configuration
+peft:
+  r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
+  task_type: "CAUSAL_LM"
+
+# Training Arguments
+training:
+  output_dir: "checkpoints/qwen-r1-countdown"
+  learning_rate: 5.0e-7
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.05
+  
+  # Steps and epochs
+  max_steps: 200  # Reduced from 450 for efficiency
+  logging_steps: 25  # TensorBoard 로깅 주기 (메모리 절약)
+  save_steps: 50
+  eval_steps: 50
+  
+  # Batch size configuration (optimized for low VRAM)
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 8  # Effective batch size = 8
+  
+  # Memory optimization
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs:
+    use_reentrant: false
+  bf16: true
+  fp16: false
+  
+  # Training stability
+  max_grad_norm: 1.0
+  optim: "adamw_torch"
+  weight_decay: 0.01
+  
+  # Logging
+  logging_dir: "logs/tensorboard"
+  report_to: ["tensorboard"]  # TensorBoard 활성화 (가벼운 설정)
+  
+  # Checkpointing
+  save_total_limit: 4
+  load_best_model_at_end: false
+
+# GRPO Specific Parameters
+grpo:
+  # Prompt and completion length (reduced for memory)
+  max_prompt_length: 256
+  max_completion_length: 512  # Reduced from 1024
+  
+  # Generation parameters
+  num_generations: 2  # Number of completions per prompt (lower = less memory)
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+  
+  # GRPO hyperparameters
+  beta: 0.001  # KL divergence coefficient (lower = less constraint)
+  
+  # Reward scaling
+  reward_scale: 1.0
+
+# Dataset Configuration
+dataset:
+  name: "Jiayi-Pan/Countdown-Tasks-3to4"
+  split: "train"
+  num_samples: 5000  # Reduced from 50k for faster training
+  test_size: 0.1
+  shuffle_seed: 42
+  
+  # Caching
+  cache_dir: ".cache/datasets"
+
+# Reward Functions
+rewards:
+  # Format reward weight
+  format_weight: 1.0
+  
+  # Equation correctness weight
+  equation_weight: 1.0
+  
+  # Combined reward type: "sum" or "product"
+  combination: "sum"
+
+# Generation Sampling Configuration
+sampling:
+  save_samples_every: 25  # Save samples every N steps
+  num_samples_to_save: 10  # Number of samples to save per checkpoint
+  save_successful_only: false  # Also save failed attempts for debugging
+
+# RunPod Specific Settings
+runpod:
+  # Auto-save to persistent storage
+  persistent_dir: "/workspace/minir1"
+  
+  # Memory monitoring
+  clear_cache_every_n_steps: 10
+  
+  # Automatic checkpoint upload to HF Hub
+  push_to_hub: false
+  hub_model_id: null  # Set your HF username/model-name if pushing
+
+# Evaluation Configuration
+evaluation:
+  # Evaluation dataset size
+  eval_samples: 500
+  
+  # Metrics to compute
+  compute_format_accuracy: true
+  compute_equation_accuracy: true
+  compute_reasoning_length: true

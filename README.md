@@ -187,36 +187,45 @@ cd MiniR1_sogmgm_ver
 
 #### 3️⃣ 환경 설정 (5-10분 소요)
 ```bash
-# UV 설치
+# UV 설치 및 환경 로드
 curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="$HOME/.local/bin:$PATH"
+source $HOME/.local/bin/env
 
 # 의존성 설치 (프로젝트 빌드 제외)
 uv sync --no-install-project
 
-# PyTorch + CUDA 설치
-uv pip install torch torchvision torchaudio \
-  --index-url https://download.pytorch.org/whl/cu121
+# PyTorch CUDA 확인 (RunPod pytorch 템플릿 사용 시 이미 설치됨)
+uv run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 
-# Flash Attention 설치 (선택, 20% 속도 향상, 5-10분 소요)
+# ❌ "False" 또는 CPU 버전이면 → CUDA 버전 설치
+# uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# Flash Attention 설치 (선택, 20% 속도 향상)
 uv pip install flash-attn --no-build-isolation
 ```
 
+> 💡 **Tip**: RunPod pytorch 템플릿을 사용했다면 PyTorch CUDA가 이미 설치되어 있을 가능성이 높습니다.
+
 #### 3️⃣ 환경 설정 (5-10분 소요)
 ```bash
-# UV 설치
+# UV 설치 및 환경 로드
 curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.cargo/env
+source $HOME/.local/bin/env
 
-# PyTorch + CUDA 설치 (uv add로 한번에 설치)
-uv add torch torchvision torchaudio --index https://download.pytorch.org/whl/cu121
+# 의존성 설치 (프로젝트 빌드 제외)
+uv sync --no-install-project
 
-# 프로젝트 의존성 동기화
-uv sync
+# PyTorch CUDA 확인 (RunPod pytorch 템플릿 사용 시 이미 설치됨)
+uv run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+
+# ❌ "False" 또는 CPU 버전이면 → CUDA 버전 설치
+# uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # Flash Attention 설치 (선택, 20% 속도 향상)
-uv add flash-attn --no-build-isolation
+uv pip install flash-attn --no-build-isolation
 ```
+
+> 💡 **Tip**: RunPod pytorch 템플릿을 사용했다면 PyTorch CUDA가 이미 설치되어 있을 가능성이 높습니다.
 
 #### 4️⃣ Hugging Face 인증
 ```bash
@@ -233,7 +242,7 @@ export HF_TOKEN="your_hf_token_here"
 nvidia-smi
 
 # PyTorch CUDA 확인
-python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch.cuda.get_device_name(0)}')"
+uv run python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}')"
 ```
 
 #### 6️⃣ 데이터셋 준비 (~2-3분)
@@ -596,17 +605,16 @@ model:
 
 ### 4. UV 명령어가 안 될 때
 ```bash
-# PATH 설정
-export PATH="$HOME/.local/bin:$PATH"
-
-# 또는
+# 환경 로드 (가장 확실한 방법)
 source $HOME/.local/bin/env
 
-# 또는 직접 실행
-$HOME/.local/bin/uv --version
+# 확인
+which uv
+uv --version
 
 # bashrc/zshrc에 추가 (영구 설정)
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+echo 'source $HOME/.local/bin/env' >> ~/.bashrc
+source ~/.bashrc
 ```
 
 ### 5. Hugging Face 다운로드 실패
@@ -741,17 +749,28 @@ cd /workspace
 # 3. 빠른 시작
 git clone https://github.com/sogmgm/MiniR1_sogmgm_ver.git
 cd MiniR1_sogmgm_ver
+
+# 4. UV 설치
 curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="$HOME/.local/bin:$PATH"
+source $HOME/.local/bin/env
+
+# 5. 의존성 설치
 uv sync --no-install-project
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 6. PyTorch 확인 (필요시 CUDA 버전 설치)
+uv run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+# False 나오면: uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 7. 데이터 준비
 uv run python scripts/dataset_prep.py --num_samples 5000
+
+# 8. 학습 시작
 uv run python scripts/train_grpo.py --config configs/training_config.yaml
 
-# 4. 학습 모니터링
+# 9. 학습 모니터링
 tail -f training.log
 
-# 5. 완료! 🎊
+# 10. 완료! 🎊
 ```
 
 **예상 소요 시간**: 4시간 | **예상 비용**: $2.50

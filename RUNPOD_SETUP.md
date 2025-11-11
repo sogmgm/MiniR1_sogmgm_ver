@@ -14,14 +14,18 @@ cd MiniR1_sogmgm_ver
 
 # 2. UV 설치 및 PATH 설정
 curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="$HOME/.local/bin:$PATH"
-uv --version
+source $HOME/.local/bin/env  # 환경 로드 (중요!)
+which uv                     # UV 경로 확인
+uv --version                 # 버전 확인 (0.9.8 이상)
 
 # 3. 의존성 설치 (프로젝트 빌드 제외)
 uv sync --no-install-project
 
-# 4. PyTorch 설치 (CUDA 12.1)
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# 4. PyTorch 확인 (RunPod pytorch 템플릿 사용 시 이미 설치됨)
+uv run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+# ✅ "2.x.x+cu12x" 와 "True" 출력 시 → Step 5로 건너뛰기
+# ❌ "False" 또는 에러 시 → 아래 명령 실행
+# uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 # 5. HuggingFace 로그인
 export HF_TOKEN="your_token_here"
@@ -57,7 +61,9 @@ tail -f training.log
 ### 설치 후 확인
 - [ ] `pwd` → `/workspace/MiniR1_sogmgm_ver`
 - [ ] `uv --version` → `uv 0.9.8` 이상
+- [ ] `which uv` → `/root/.local/bin/uv`
 - [ ] `ls pyproject.toml` → 파일 존재 확인
+- [ ] PyTorch CUDA 확인 → `True` 출력
 - [ ] 환경 검증 통과 (`check_environment.py`)
 
 ---
@@ -125,15 +131,19 @@ pwd
 # UV 설치
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# PATH 설정 (중요!)
-export PATH="$HOME/.local/bin:$PATH"
-
-# 또는 (설치 위치에 따라)
+# 환경 로드 (필수!)
 source $HOME/.local/bin/env
+
+# UV 설치 확인
+which uv
+# 출력: /root/.local/bin/uv
 
 # 버전 확인
 uv --version
+# 출력: uv 0.9.8
 ```
+
+> 💡 **Tip**: "WARN: shadowed commands" 경고가 나오면 `source $HOME/.local/bin/env`를 실행하세요.
 
 ### 4-2. 프로젝트 디렉토리 확인
 ```bash
@@ -151,10 +161,24 @@ ls -la pyproject.toml
 uv sync --no-install-project
 ```
 
-### 4-4. PyTorch 설치 (CUDA 12.1)
+### 4-4. PyTorch 확인 및 설치 (필요시)
 ```bash
+# ⚠️ RunPod의 pytorch 템플릿 사용 시 이미 CUDA PyTorch가 설치되어 있을 수 있음
+
+# 먼저 확인
+uv run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+
+# 출력 예시:
+# 2.9.0+cu128
+# True
+
+# ✅ "2.x.x+cu12x" 이고 "True" 면 → 건너뛰기 (이미 설치됨)
+# ❌ "2.x.x+cpu" 이거나 "False" 면 → 아래 실행 필요
+
 uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
+
+> 💡 **Tip**: RunPod pytorch 템플릿을 사용했다면 보통 CUDA PyTorch가 이미 설치되어 있습니다.
 
 ### 4-5. Flash Attention 설치 (선택)
 ```bash
@@ -325,13 +349,37 @@ uv run python scripts/evaluate.py \
 
 ### ❌ UV 명령어를 찾을 수 없음
 ```bash
-export PATH="$HOME/.local/bin:$PATH"
-# 또는
+# 환경 로드 (가장 확실한 방법)
 source $HOME/.local/bin/env
 
-# 영구 설정
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+# 확인
+which uv
+uv --version
+
+# 영구 설정 (선택)
+echo 'source $HOME/.local/bin/env' >> ~/.bashrc
 source ~/.bashrc
+```
+
+### ❌ UV 설치 후 "shadowed commands" 경고
+```bash
+# 환경을 다시 로드하면 해결됨
+source $HOME/.local/bin/env
+
+# 또는 새 셸 시작
+exec $SHELL
+```
+
+### ❌ PyTorch CUDA 미지원 (CPU 버전 설치됨)
+```bash
+# 확인
+uv run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+
+# "False" 또는 "2.x.x+cpu" 출력 시 → CUDA 버전 재설치
+uv pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 재확인
+uv run python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, Version: {torch.version.cuda}')"
 ```
 
 ### ❌ pyproject.toml을 찾을 수 없음

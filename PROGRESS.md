@@ -113,7 +113,7 @@
 MiniR1/
 ├── README.md                     ✅ 프로젝트 개요
 ├── PROGRESS.md                   ✅ 개발 진행 기록
-├── RUNPOD_SETUP.md              ✅ RunPod 실행 가이드
+├── RUNPOD_SETUP.md              ✅ RunPod 완전 가이드 (빠른시작+상세설명+문제해결)
 ├── pyproject.toml               ✅ UV 패키지 설정
 ├── .gitignore                   ✅
 ├── configs/

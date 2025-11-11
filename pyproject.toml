@@ -24,6 +24,7 @@ dependencies = [
     # Data processing
     "numpy>=1.24.0",
     "pyyaml>=6.0",
+    "requests>=2.32.2",
     
     # Logging & monitoring
     "tqdm>=4.66.0",
@@ -46,22 +47,37 @@ flash-attn = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-# UV specific configurations
-index-url = "https://pypi.org/simple"
+# Hatch build configuration
+[tool.hatch.build.targets.wheel]
+packages = ["scripts"]
+only-include = ["scripts", "configs"]
 
-[[tool.uv.index]]
-# PyTorch with CUDA 12.1 support
-name = "pytorch"
-url = "https://download.pytorch.org/whl/cu121"
-explicit = true
+[tool.hatch.build.targets.sdist]
+include = [
+    "scripts/",
+    "configs/",
+    "README.md",
+    "RUNPOD_SETUP.md",
+    "TENSORBOARD_GUIDE.md",
+    "PROGRESS.md",
+    "pyproject.toml",
+]
 
-[tool.uv.sources]
-torch = { index = "pytorch" }
-torchvision = { index = "pytorch" }
-torchaudio = { index = "pytorch" }
+# ============================================
+# UV 사용 가이드 (RunPod)
+# ============================================
+# 
+# 1. 의존성 설치 (프로젝트 빌드 제외):
+#    uv sync --no-install-project
+#
+# 2. PyTorch 설치 (CUDA 12.1):
+#    uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#
+# 3. Flash Attention (선택, 5-10분 소요):
+#    uv pip install flash-attn --no-build-isolation
+#
+# 4. 실행:
+#    uv run python scripts/train_grpo.py --config configs/training_config.yaml
+#
+# 상세 가이드: RUNPOD_SETUP.md
 
-# Install commands reference:
-# uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-# uv pip install flash-attn --no-build-isolation
-# uv pip install -e .

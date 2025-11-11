@@ -1,6 +1,64 @@
-# RunPod 실행 가이드
+# RunPod 완전 가이드
 
-> Mini-R1 프로젝트를 RunPod에서 **순차적으로 실행**하기 위한 가이드
+> Mini-R1 프로젝트를 RunPod에서 실행하기 위한 **완벽 가이드**
+
+---
+
+## ⚡ 빠른 시작 (5분 설치)
+
+```bash
+# 1. 프로젝트 클론
+cd /workspace
+git clone https://github.com/sogmgm/MiniR1_sogmgm_ver.git
+cd MiniR1_sogmgm_ver
+
+# 2. UV 설치 및 PATH 설정
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+uv --version
+
+# 3. 의존성 설치 (프로젝트 빌드 제외)
+uv sync --no-install-project
+
+# 4. PyTorch 설치 (CUDA 12.1)
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# 5. HuggingFace 로그인
+export HF_TOKEN="your_token_here"
+
+# 6. 환경 확인
+uv run python scripts/check_environment.py
+
+# 7. 데이터 준비 (2-3분)
+uv run python scripts/dataset_prep.py --num_samples 5000
+
+# 8. 학습 시작 (백그라운드)
+nohup uv run python scripts/train_grpo.py --config configs/training_config.yaml > training.log 2>&1 &
+
+# 9. 로그 확인
+tail -f training.log
+```
+
+**예상 총 소요 시간**: 
+- 설치: ~10분
+- 데이터 준비: ~3분
+- 학습 (200 steps): 3-4시간 (RTX 4090 기준)
+
+---
+
+## 📋 빠른 체크리스트
+
+### 시작 전 확인
+- [ ] RunPod GPU 선택 (RTX 4090/A5000 권장)
+- [ ] 템플릿: `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404` 또는 CUDA 12.1+
+- [ ] 볼륨: 50GB 이상
+- [ ] HuggingFace 토큰 준비
+
+### 설치 후 확인
+- [ ] `pwd` → `/workspace/MiniR1_sogmgm_ver`
+- [ ] `uv --version` → `uv 0.9.8` 이상
+- [ ] `ls pyproject.toml` → 파일 존재 확인
+- [ ] 환경 검증 통과 (`check_environment.py`)
 
 ---
 
@@ -8,11 +66,11 @@
 
 ### 💰 추천 GPU (가성비 + 성능)
 
-| GPU | VRAM | 시간당 비용 | Qwen 1.5B | Qwen 3B | 200 Steps 예상 시간 | 총 예상 비용 |
-|-----|------|------------|-----------|---------|-------------------|-------------|
+| GPU | VRAM | 시간당 비용 | Qwen 1.5B | Qwen 3B | 학습 시간 | 총 비용 |
+|-----|------|------------|-----------|---------|----------|---------|
 | **RTX 4090** ⭐ | 24GB | ~$0.69 | ✅ 최적 | ✅ 최적 | 3-4시간 | ~$2.50 |
 | **RTX A5000** | 24GB | ~$0.50 | ✅ 최적 | ✅ 최적 | 4-6시간 | ~$2.50 |
-| **RTX 3090** | 24GB | ~$0.44 | ✅ 좋음 | ✅ 좋음 | 5-7시간 | ~$2.50 |
+| **RTX 3090** | 24GB | ~$0.44 | ✅ 좋음 | ✅ 좋음 | 5-7시간 | ~$2.60 |
 | **L4** | 24GB | ~$0.45 | ✅ 가능 | ✅ 가능 | 6-8시간 | ~$3.00 |
 
 **최종 추천**: 
@@ -20,19 +78,17 @@
 - **속도 최우선**: RTX 4090
 - **안정성**: RTX A5000
 
-### � 모델 선택
+### 💡 모델 선택
 
 - **Qwen2.5-1.5B** (추천 ⭐)
   - VRAM: ~12-14GB
   - 빠른 학습 속도
-  - 저렴한 비용
   - 첫 실험에 최적
   
 - **Qwen2.5-3B**
   - VRAM: ~14-18GB
   - 더 나은 추론 성능
-  - 약간 느린 속도
-  - VRAM 16GB+ 권장
+  - VRAM 18GB+ 권장
 
 ---
 
@@ -40,67 +96,83 @@
 
 1. [RunPod](https://www.runpod.io/) 로그인
 2. **Community Cloud** 또는 **Secure Cloud** 선택
-3. 위에서 선택한 GPU 찾기
-4. **템플릿**: `RunPod PyTorch 2.4` 또는 `CUDA 12.1` 포함된 것
-5. **볼륨**: 최소 30GB (50GB 권장)
-6. **Deploy** 클릭!
+3. GPU 선택
+4. **템플릿**: `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404` (권장)
+5. **볼륨**: 50GB 이상
+6. **Deploy** 클릭
 7. SSH 또는 **Web Terminal** 접속
 
 ---
 
-## 📦 Step 3: 프로젝트 업로드
+## 📦 Step 3: 프로젝트 클론
 
-### 방법 1: GitHub (추천)
 ```bash
 cd /workspace
-git clone https://github.com/YOUR_USERNAME/MiniR1.git
-cd MiniR1
-```
+git clone https://github.com/sogmgm/MiniR1_sogmgm_ver.git
+cd MiniR1_sogmgm_ver
 
-### 방법 2: 직접 업로드
-```bash
-# 로컬에서
-cd /Users/kb.yang/Desktop/kb/repo
-tar -czf minir1.tar.gz MiniR1/
-
-# RunPod 파일 브라우저로 업로드 후
-cd /workspace
-tar -xzf minir1.tar.gz
-cd MiniR1
+# 현재 위치 확인 (중요!)
+pwd
+# 출력: /workspace/MiniR1_sogmgm_ver
 ```
 
 ---
 
-## 🛠️ Step 4: UV 및 환경 설정
+## 🛠️ Step 4: UV 설치 및 환경 설정
 
-### 4-1. UV 설치
+### 4-1. UV 설치 및 PATH 설정
 ```bash
+# UV 설치
 curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.cargo/env
+
+# PATH 설정 (중요!)
+export PATH="$HOME/.local/bin:$PATH"
+
+# 또는 (설치 위치에 따라)
+source $HOME/.local/bin/env
+
+# 버전 확인
 uv --version
 ```
 
-### 4-2. PyTorch 설치 (CUDA 12.1)
+### 4-2. 프로젝트 디렉토리 확인
 ```bash
-uv add torch torchvision torchaudio --index https://download.pytorch.org/whl/cu121
+# 반드시 프로젝트 디렉토리에 있어야 함
+pwd
+# /workspace/MiniR1_sogmgm_ver
+
+# pyproject.toml 확인
+ls -la pyproject.toml
 ```
 
-### 4-3. 프로젝트 의존성 동기화
+### 4-3. 의존성 설치 (프로젝트 빌드 제외)
 ```bash
-uv sync
+# 의존성만 설치 (권장, 빠름)
+uv sync --no-install-project
 ```
 
-### 4-4. Flash Attention 설치 (선택, 속도 20% 향상)
+### 4-4. PyTorch 설치 (CUDA 12.1)
 ```bash
-uv add flash-attn --no-build-isolation
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
-> ⚠️ 실패해도 괜찮음. 없으면 조금 느릴 뿐.
 
-### 4-5. HuggingFace 로그인
+### 4-5. Flash Attention 설치 (선택)
 ```bash
-# 토큰 없으면: https://huggingface.co/settings/tokens
+# 속도 20% 향상, 하지만 5-10분 소요
+uv pip install flash-attn --no-build-isolation
+```
+> ⚠️ 실패해도 괜찮음. 없으면 조금 느릴 뿐입니다.
+
+### 4-6. HuggingFace 로그인
+```bash
+# 방법 1: 토큰으로 (권장)
+export HF_TOKEN="your_token_here"
+
+# 방법 2: 대화형
 uv run huggingface-cli login
 ```
+
+**토큰 발급**: https://huggingface.co/settings/tokens
 
 ---
 
@@ -110,175 +182,182 @@ uv run huggingface-cli login
 uv run python scripts/check_environment.py
 ```
 
-이 스크립트가 확인:
-- ✅ GPU 및 VRAM
-- ✅ CUDA 버전
-- ✅ 디스크 공간
-- ✅ RAM
-- ✅ 패키지 설치 여부
-- 💡 최적 config 추천
+**예상 출력**:
+```
+✅ GPU: NVIDIA GeForce RTX 4090
+✅ VRAM: 24.0 GB
+✅ CUDA: 12.1
+✅ PyTorch: 2.5.0+cu121
+✅ All dependencies installed
+```
 
 ---
 
 ## 📊 Step 6: 데이터셋 준비
 
 ```bash
+# 기본 5,000 샘플 (추천)
 uv run python scripts/dataset_prep.py --num_samples 5000
+
+# 빠른 테스트용
+uv run python scripts/dataset_prep.py --num_samples 1000
+
+# 긴 학습용
+uv run python scripts/dataset_prep.py --num_samples 10000
 ```
 
 **예상 시간**: 2-5분  
 **생성 파일**:
-- `.cache/datasets/train_countdown_r1.json` (4500개)
-- `.cache/datasets/test_countdown_r1.json` (500개)
+- `.cache/datasets/train_countdown_r1.json`
+- `.cache/datasets/test_countdown_r1.json`
 
 ---
 
-## 🧪 Step 7: 보상 함수 테스트
+## 🎯 Step 7: 모델 설정 (선택)
 
-```bash
-uv run python scripts/rewards.py
-```
-
-**예상 결과**: 모든 테스트 통과 ✅
-
----
-
-## 🎯 Step 8: 모델 설정 (필요시 수정)
-
-### 8-1. 모델 선택
 ```bash
 nano configs/training_config.yaml
 ```
 
-**Qwen 1.5B 사용** (추천):
+### 모델 선택
 ```yaml
+# Qwen 1.5B (추천)
 model:
   name: "Qwen/Qwen2.5-1.5B-Instruct"
-```
 
-**Qwen 3B 사용** (VRAM 18GB+ 필요):
-```yaml
+# Qwen 3B (VRAM 18GB+ 필요)
 model:
   name: "Qwen/Qwen2.5-3B-Instruct"
 ```
 
-### 8-2. GPU 메모리 부족하면
+### 메모리 부족 시
 ```yaml
 grpo:
-  max_completion_length: 384  # 512 → 384
+  max_completion_length: 256  # 512 → 256
   num_generations: 1          # 2 → 1
 
 training:
-  gradient_accumulation_steps: 16  # 8 → 16
+  gradient_accumulation_steps: 8  # 4 → 8
 ```
 
 ---
 
-## 🚀 Step 9: 학습 시작!
+## 🚀 Step 8: 학습 시작!
 
+### 방법 1: 백그라운드 실행 (권장)
+```bash
+nohup uv run python scripts/train_grpo.py \
+  --config configs/training_config.yaml \
+  > training.log 2>&1 &
+
+# 로그 확인
+tail -f training.log
+```
+
+### 방법 2: tmux 사용
+```bash
+# 세션 생성
+tmux new -s training
+
+# 학습 실행
+uv run python scripts/train_grpo.py --config configs/training_config.yaml
+
+# 나가기: Ctrl+B, D
+# 재접속: tmux attach -t training
+```
+
+### 방법 3: 포그라운드
 ```bash
 uv run python scripts/train_grpo.py --config configs/training_config.yaml
 ```
 
-**예상 시간**: 
-- RTX 4090: 3-4시간
-- RTX 3090: 5-7시간
-- L4: 6-8시간
-
-**체크포인트 저장**: 50, 100, 150, 200 steps
-
 ---
 
-## � Step 10: 모니터링 (학습 중)
+## 📈 Step 9: 모니터링
 
-### 터미널 1: 학습 로그
-## 📈 Step 10: 모니터링 (학습 중)
-
-### 터미널 1: TensorBoard 실행 (선택)
+### 실시간 로그
 ```bash
-# TensorBoard 시작
+tail -f training.log
+```
+
+### TensorBoard (선택)
+```bash
+# 별도 터미널에서
 tensorboard --logdir=logs/tensorboard --host=0.0.0.0 --port=6006
 ```
-**접속**: RunPod의 포트 포워딩 또는 `http://localhost:6006`
 
-### 터미널 2: 학습 진행상황 확인
-```bash
-# 실시간 로그 보기
-tail -f logs/training.log
-```
+**RunPod 포트 연결**:
+1. RunPod UI → Pod 클릭 → "Connect"
+2. "TCP Port Mappings" → Port 6006 추가
+3. 생성된 URL 접속
 
-### 터미널 3: GPU 사용량 모니터링
+### GPU 모니터링
 ```bash
-# 1초마다 GPU 상태 확인
 watch -n 1 nvidia-smi
 ```
 
 ### 생성 샘플 확인
 ```bash
-# Step 50 샘플
+ls -lh completion_samples/
 cat completion_samples/step_0050_success.txt
-
-# Step 100 샘플
 cat completion_samples/step_0100_success.txt
 ```
 
-### TensorBoard에서 확인 가능한 메트릭
-- **Loss**: 학습 손실
-- **Learning Rate**: 학습률 변화
-- **Rewards**: 보상 점수 변화
-- **GPU Utilization**: GPU 사용률
-
-> 💡 TensorBoard는 25 step마다 업데이트됩니다 (메모리 절약)
-
 ---
 
-## 🎓 Step 11: 학습 완료 후
+## 🎓 Step 10: 평가
 
-### 결과 확인
 ```bash
-# 진행 상황 보기
-cat PROGRESS.md
+# 최종 평가
+uv run python scripts/evaluate.py \
+  --checkpoint checkpoints/qwen-r1-countdown/checkpoint-200 \
+  --num_samples 100
 
-# 체크포인트 확인
-ls -lh checkpoints/qwen-r1-countdown/
-```
-
-### 최종 모델 평가
-```bash
-uv run python scripts/evaluate.py --checkpoint checkpoints/qwen-r1-countdown/checkpoint-200
+# 특정 체크포인트
+uv run python scripts/evaluate.py \
+  --checkpoint checkpoints/qwen-r1-countdown/checkpoint-100 \
+  --num_samples 50
 ```
 
 ---
 
 ## 🔧 문제 해결
 
-### ❌ CUDA Out of Memory
-**증상**: RuntimeError: CUDA out of memory
-
-**해결책**:
+### ❌ UV 명령어를 찾을 수 없음
 ```bash
-# configs/training_config.yaml 수정
-nano configs/training_config.yaml
+export PATH="$HOME/.local/bin:$PATH"
+# 또는
+source $HOME/.local/bin/env
+
+# 영구 설정
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-```yaml
-# 1.5B로 변경
-model:
-  name: "Qwen/Qwen2.5-1.5B-Instruct"
+### ❌ pyproject.toml을 찾을 수 없음
+```bash
+# 프로젝트 디렉토리로 이동
+cd /workspace/MiniR1_sogmgm_ver
+pwd
+ls -la pyproject.toml
+```
 
-# 시퀀스 길이 축소
+### ❌ CUDA Out of Memory
+```yaml
+# configs/training_config.yaml 수정
+model:
+  name: "Qwen/Qwen2.5-1.5B-Instruct"  # 3B → 1.5B
+
 grpo:
-  max_completion_length: 384
+  max_completion_length: 256
   num_generations: 1
 
-# Gradient accumulation 증가
 training:
-  gradient_accumulation_steps: 16
+  gradient_accumulation_steps: 8
 ```
 
-### ❌ 학습 중단되었을 때
+### ❌ 학습 중단 후 재개
 ```bash
-# 마지막 체크포인트에서 재개
 uv run python scripts/train_grpo.py \
   --config configs/training_config.yaml \
   --resume_from_checkpoint checkpoints/qwen-r1-countdown/checkpoint-100
@@ -286,7 +365,9 @@ uv run python scripts/train_grpo.py \
 
 ### ❌ Flash Attention 설치 실패
 ```bash
-# configs/training_config.yaml 수정
+# 무시하고 진행 (선택사항이므로 OK)
+
+# 또는 설정에서 비활성화
 nano configs/training_config.yaml
 ```
 
@@ -295,53 +376,29 @@ model:
   attn_implementation: "eager"  # flash_attention_2 → eager
 ```
 
-### ❌ UV 설치 실패
-```bash
-# 대체: pip 사용
-python -m venv .venv
-source .venv/bin/activate
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-pip install -e .
-```
-
-### ❌ Disk Space 부족
-```bash
-# 데이터셋 샘플 줄이기
-uv run python scripts/dataset_prep.py --num_samples 2000
-
-# 체크포인트 개수 줄이기
-# configs/training_config.yaml에서
-training:
-  save_total_limit: 2  # 4 → 2
-```
-
 ---
 
-## 💡 팁과 트릭
+## 💡 유용한 팁
 
-### 빠른 테스트 (10 steps만)
+### 빠른 테스트 (10 steps)
 ```bash
 uv run python scripts/train_grpo.py \
   --config configs/training_config.yaml \
   --max_steps 10
 ```
 
-### GPU 활용률 최대화
-```yaml
-# 메모리 여유 있으면
-training:
-  per_device_train_batch_size: 2  # 1 → 2
-  gradient_accumulation_steps: 4   # 8 → 4
+### 프로세스 관리
+```bash
+# 확인
+ps aux | grep train_grpo
+
+# 종료
+pkill -f train_grpo
 ```
 
-### 더 작은 데이터셋으로 실험
+### 디스크 공간 확인
 ```bash
-uv run python scripts/dataset_prep.py --num_samples 1000
-```
-
-### 학습 중 다른 터미널에서 샘플 생성 (TODO)
-```bash
-uv run python scripts/generate_samples.py --checkpoint checkpoints/qwen-r1-countdown/checkpoint-100
+df -h /workspace
 ```
 
 ---
@@ -349,14 +406,16 @@ uv run python scripts/generate_samples.py --checkpoint checkpoints/qwen-r1-count
 ## � 예상 결과
 
 ### 학습 진행 (200 Steps)
+
 | Step | Format 정확도 | 정답률 | 특징 |
 |------|--------------|--------|------|
-| 50   | ~90% | ~5% | `<think></think><answer></answer>` 학습 완료 |
-| 100  | ~95% | ~15-20% | 간단한 계산 시작 |
-| 150  | ~95% | ~25-30% | 연산 조합 시도 |
-| 200  | ~95% | ~35-40% | 복잡한 추론 패턴 |
+| 50   | ~90% | ~5% | 형식 학습 완료 |
+| 100  | ~95% | ~15-20% | 초기 추론 시작 |
+| 150  | ~95% | ~25-30% | 패턴 인식 |
+| 200  | ~95% | ~35-40% | 안정적 추론 |
 
 ### 리소스 사용량
+
 - **GPU 메모리**: 
   - Qwen 1.5B: 12-14GB
   - Qwen 3B: 14-18GB
@@ -365,52 +424,50 @@ uv run python scripts/generate_samples.py --checkpoint checkpoints/qwen-r1-count
 
 ---
 
-## ✅ 체크리스트
+## 📊 핵심 개념
 
-실행 전 확인:
+### 데이터 형태
+```
+입력: {nums: [19,36,55,7], target: 65}
+  ↓
+프롬프트: "Using [19,36,55,7], make 65. <think>"
+  ↓
+모델 출력: "추론... </think>\n<answer>55+36-7-19</answer>"
+  ↓
+보상: Format(1.0) + Equation(1.0) = 2.0
+```
 
-- [ ] GPU 선택 완료 (24GB VRAM 권장)
-- [ ] RunPod Pod 생성 및 접속
-- [ ] 프로젝트 업로드 (GitHub 또는 직접)
-- [ ] UV 설치 및 가상 환경 생성
-- [ ] PyTorch + 의존성 설치
+### 학습 진행
+- **0-50 steps**: 형식 학습 (`<think></think>` 구조)
+- **50-100 steps**: 초기 추론 (간단한 계산)
+- **100-150 steps**: 패턴 인식 (숫자 조합)
+- **150-200 steps**: 성능 수렴 (안정적 추론)
+
+---
+
+## 🔗 더 알아보기
+
+- **전체 가이드**: [README.md](README.md)
+- **TensorBoard**: [TENSORBOARD_GUIDE.md](TENSORBOARD_GUIDE.md)
+- **진행 상황**: [PROGRESS.md](PROGRESS.md)
+
+---
+
+## ✅ 최종 체크리스트
+
+- [ ] GPU 선택 및 Pod 생성
+- [ ] 프로젝트 클론
+- [ ] UV 설치 및 PATH 설정
+- [ ] 의존성 설치 (`uv sync --no-install-project`)
+- [ ] PyTorch 설치
 - [ ] HuggingFace 로그인
-- [ ] 환경 검증 통과 (`check_environment.py`)
-- [ ] 디스크 여유 공간 20GB+
-- [ ] 모델 선택 (1.5B 또는 3B)
-- [ ] Pod 자동 종료 방지 설정
+- [ ] 환경 검증
+- [ ] 데이터 준비
+- [ ] 학습 시작
+- [ ] 모니터링 설정
 
 ---
 
-## 📞 추가 도움말
+**🚀 모든 준비 완료! 학습을 시작하세요!**
 
-**로그 확인**:
-```bash
-# 학습 로그
-cat logs/training.log
-
-# GPU 상태
-nvidia-smi
-
-# 진행 상황
-cat PROGRESS.md
-```
-
-**파일 구조**:
-```
-MiniR1/
-├── checkpoints/           # 모델 체크포인트
-│   └── qwen-r1-countdown/
-│       ├── checkpoint-50/
-│       ├── checkpoint-100/
-│       ├── checkpoint-150/
-│       └── checkpoint-200/
-├── completion_samples/    # 생성 샘플
-├── logs/                  # 학습 로그
-├── .cache/datasets/       # 전처리된 데이터셋
-└── configs/               # 설정 파일
-```
-
----
-
-**준비 완료! Step 4부터 순차적으로 실행하세요!** 🚀
+**예상 총 비용**: ~$2.50 (RTX 4090, 200 steps 기준)

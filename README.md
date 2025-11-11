@@ -106,7 +106,7 @@ Step 150-200: 수렴 (40-50% 정확도)
 ```
 MiniR1/
 ├── README.md                    # 📖 프로젝트 전체 가이드 (이 문서)
-├── RUNPOD_SETUP.md              # 🚀 RunPod 상세 설정 가이드
+├── RUNPOD_SETUP.md              # 🚀 RunPod 완전 가이드 (설치+실행+문제해결)
 ├── TENSORBOARD_GUIDE.md         # 📊 TensorBoard 사용법
 ├── PROGRESS.md                  # 📝 개발 진행 상황 기록
 ├── pyproject.toml               # 📦 UV 패키지 설정 및 의존성
@@ -181,8 +181,25 @@ MiniR1/
 #### 2️⃣ 프로젝트 클론
 ```bash
 cd /workspace
-git clone https://github.com/YOUR_USERNAME/MiniR1.git
-cd MiniR1
+git clone https://github.com/sogmgm/MiniR1_sogmgm_ver.git
+cd MiniR1_sogmgm_ver
+```
+
+#### 3️⃣ 환경 설정 (5-10분 소요)
+```bash
+# UV 설치
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+
+# 의존성 설치 (프로젝트 빌드 제외)
+uv sync --no-install-project
+
+# PyTorch + CUDA 설치
+uv pip install torch torchvision torchaudio \
+  --index-url https://download.pytorch.org/whl/cu121
+
+# Flash Attention 설치 (선택, 20% 속도 향상, 5-10분 소요)
+uv pip install flash-attn --no-build-isolation
 ```
 
 #### 3️⃣ 환경 설정 (5-10분 소요)
@@ -569,7 +586,7 @@ training:
 python -c "import flash_attn; print('Flash Attention 설치됨')"
 
 # 설치 안됐다면
-uv add flash-attn --no-build-isolation
+uv pip install flash-attn --no-build-isolation
 
 # 또는 설정에서 비활성화 (느려지지만 호환성 높음)
 # configs/training_config.yaml
@@ -580,13 +597,16 @@ model:
 ### 4. UV 명령어가 안 될 때
 ```bash
 # PATH 설정
-source $HOME/.cargo/env
+export PATH="$HOME/.local/bin:$PATH"
+
+# 또는
+source $HOME/.local/bin/env
 
 # 또는 직접 실행
-$HOME/.cargo/bin/uv --version
+$HOME/.local/bin/uv --version
 
 # bashrc/zshrc에 추가 (영구 설정)
-echo 'source $HOME/.cargo/env' >> ~/.bashrc
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ```
 
 ### 5. Hugging Face 다운로드 실패
@@ -719,12 +739,12 @@ MIT License - 자유롭게 사용, 수정, 배포 가능
 cd /workspace
 
 # 3. 빠른 시작
-git clone https://github.com/YOUR_USERNAME/MiniR1.git
-cd MiniR1
+git clone https://github.com/sogmgm/MiniR1_sogmgm_ver.git
+cd MiniR1_sogmgm_ver
 curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.cargo/env
-uv add torch torchvision torchaudio --index https://download.pytorch.org/whl/cu121
-uv sync
+export PATH="$HOME/.local/bin:$PATH"
+uv sync --no-install-project
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 uv run python scripts/dataset_prep.py --num_samples 5000
 uv run python scripts/train_grpo.py --config configs/training_config.yaml
 

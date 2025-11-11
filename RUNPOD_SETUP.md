@@ -80,32 +80,26 @@ source $HOME/.cargo/env
 uv --version
 ```
 
-### 4-2. 가상 환경 생성
+### 4-2. PyTorch 설치 (CUDA 12.1)
 ```bash
-uv venv .venv
-source .venv/bin/activate
+uv add torch torchvision torchaudio --index https://download.pytorch.org/whl/cu121
 ```
 
-### 4-3. PyTorch 설치 (CUDA 12.1)
+### 4-3. 프로젝트 의존성 동기화
 ```bash
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+uv sync
 ```
 
-### 4-4. 프로젝트 의존성 설치
+### 4-4. Flash Attention 설치 (선택, 속도 20% 향상)
 ```bash
-uv pip install -e .
-```
-
-### 4-5. Flash Attention 설치 (선택, 속도 20% 향상)
-```bash
-uv pip install flash-attn --no-build-isolation
+uv add flash-attn --no-build-isolation
 ```
 > ⚠️ 실패해도 괜찮음. 없으면 조금 느릴 뿐.
 
-### 4-6. HuggingFace 로그인
+### 4-5. HuggingFace 로그인
 ```bash
 # 토큰 없으면: https://huggingface.co/settings/tokens
-huggingface-cli login
+uv run huggingface-cli login
 ```
 
 ---
@@ -113,7 +107,7 @@ huggingface-cli login
 ## ✅ Step 5: 환경 검증
 
 ```bash
-python scripts/check_environment.py
+uv run python scripts/check_environment.py
 ```
 
 이 스크립트가 확인:
@@ -129,7 +123,7 @@ python scripts/check_environment.py
 ## 📊 Step 6: 데이터셋 준비
 
 ```bash
-python scripts/dataset_prep.py --num_samples 5000
+uv run python scripts/dataset_prep.py --num_samples 5000
 ```
 
 **예상 시간**: 2-5분  
@@ -142,7 +136,7 @@ python scripts/dataset_prep.py --num_samples 5000
 ## 🧪 Step 7: 보상 함수 테스트
 
 ```bash
-python scripts/rewards.py
+uv run python scripts/rewards.py
 ```
 
 **예상 결과**: 모든 테스트 통과 ✅
@@ -183,7 +177,7 @@ training:
 ## 🚀 Step 9: 학습 시작!
 
 ```bash
-python scripts/train_grpo.py --config configs/training_config.yaml
+uv run python scripts/train_grpo.py --config configs/training_config.yaml
 ```
 
 **예상 시간**: 
@@ -249,9 +243,9 @@ cat PROGRESS.md
 ls -lh checkpoints/qwen-r1-countdown/
 ```
 
-### 최종 모델 평가 (TODO: evaluate.py 추가 예정)
+### 최종 모델 평가
 ```bash
-python scripts/evaluate.py --checkpoint checkpoints/qwen-r1-countdown/checkpoint-200
+uv run python scripts/evaluate.py --checkpoint checkpoints/qwen-r1-countdown/checkpoint-200
 ```
 
 ---
@@ -285,7 +279,7 @@ training:
 ### ❌ 학습 중단되었을 때
 ```bash
 # 마지막 체크포인트에서 재개
-python scripts/train_grpo.py \
+uv run python scripts/train_grpo.py \
   --config configs/training_config.yaml \
   --resume_from_checkpoint checkpoints/qwen-r1-countdown/checkpoint-100
 ```
@@ -306,14 +300,14 @@ model:
 # 대체: pip 사용
 python -m venv .venv
 source .venv/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 pip install -e .
 ```
 
 ### ❌ Disk Space 부족
 ```bash
 # 데이터셋 샘플 줄이기
-python scripts/dataset_prep.py --num_samples 2000
+uv run python scripts/dataset_prep.py --num_samples 2000
 
 # 체크포인트 개수 줄이기
 # configs/training_config.yaml에서
@@ -327,7 +321,7 @@ training:
 
 ### 빠른 테스트 (10 steps만)
 ```bash
-python scripts/train_grpo.py \
+uv run python scripts/train_grpo.py \
   --config configs/training_config.yaml \
   --max_steps 10
 ```
@@ -342,12 +336,12 @@ training:
 
 ### 더 작은 데이터셋으로 실험
 ```bash
-python scripts/dataset_prep.py --num_samples 1000
+uv run python scripts/dataset_prep.py --num_samples 1000
 ```
 
 ### 학습 중 다른 터미널에서 샘플 생성 (TODO)
 ```bash
-python scripts/generate_samples.py --checkpoint checkpoints/qwen-r1-countdown/checkpoint-100
+uv run python scripts/generate_samples.py --checkpoint checkpoints/qwen-r1-countdown/checkpoint-100
 ```
 
 ---

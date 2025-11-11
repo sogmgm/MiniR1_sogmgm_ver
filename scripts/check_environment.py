@@ -53,7 +53,8 @@ def check_gpu():
         
     except ImportError:
         print("❌ PyTorch not installed!")
-        print("   Run: uv pip install torch --index-url https://download.pytorch.org/whl/cu121")
+        print("   Run: uv add torch torchvision torchaudio --index https://download.pytorch.org/whl/cu121")
+        print("   Then: uv sync")
         return False
     except Exception as e:
         print(f"❌ Error checking GPU: {e}")
@@ -136,7 +137,7 @@ def check_dependencies():
             all_good = False
     
     if not all_good:
-        print("\n   Install missing packages with: uv pip install -e .")
+        print("\n   Install missing packages with: uv sync")
         return False
     
     return True

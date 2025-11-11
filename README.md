@@ -191,18 +191,14 @@ cd MiniR1
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.cargo/env
 
-# 가상환경 생성
-uv venv .venv
-source .venv/bin/activate
+# PyTorch + CUDA 설치 (uv add로 한번에 설치)
+uv add torch torchvision torchaudio --index https://download.pytorch.org/whl/cu121
 
-# PyTorch + CUDA 설치
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# 프로젝트 의존성 설치
-uv pip install -e .
+# 프로젝트 의존성 동기화
+uv sync
 
 # Flash Attention 설치 (선택, 20% 속도 향상)
-uv pip install flash-attn --no-build-isolation
+uv add flash-attn --no-build-isolation
 ```
 
 #### 4️⃣ Hugging Face 인증
@@ -573,7 +569,7 @@ training:
 python -c "import flash_attn; print('Flash Attention 설치됨')"
 
 # 설치 안됐다면
-uv pip install flash-attn --no-build-isolation
+uv add flash-attn --no-build-isolation
 
 # 또는 설정에서 비활성화 (느려지지만 호환성 높음)
 # configs/training_config.yaml
@@ -727,9 +723,8 @@ git clone https://github.com/YOUR_USERNAME/MiniR1.git
 cd MiniR1
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.cargo/env
-uv venv .venv && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
-uv pip install -e .
+uv add torch torchvision torchaudio --index https://download.pytorch.org/whl/cu121
+uv sync
 uv run python scripts/dataset_prep.py --num_samples 5000
 uv run python scripts/train_grpo.py --config configs/training_config.yaml
 

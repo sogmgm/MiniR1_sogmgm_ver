@@ -11,9 +11,8 @@ git clone https://github.com/YOUR_USERNAME/MiniR1.git && \
 cd MiniR1 && \
 curl -LsSf https://astral.sh/uv/install.sh | sh && \
 source $HOME/.cargo/env && \
-uv venv .venv && source .venv/bin/activate && \
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121 && \
-uv pip install -e .
+uv add torch torchvision torchaudio --index https://download.pytorch.org/whl/cu121 && \
+uv sync
 
 # 2. HuggingFace 로그인
 export HF_TOKEN="your_token_here"
@@ -120,7 +119,7 @@ grpo:
 ### 느린 학습
 ```bash
 # Flash Attention 설치
-uv pip install flash-attn --no-build-isolation
+uv add flash-attn --no-build-isolation
 ```
 
 ### UV 명령어 안 됨

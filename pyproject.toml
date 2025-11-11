@@ -71,14 +71,32 @@ include = [
 # 1. 의존성 설치 (프로젝트 빌드 제외):
 #    uv sync --no-install-project
 #
-# 2. PyTorch 설치 (CUDA 12.1):
+# 2. PyTorch 확인 (RunPod pytorch 템플릿 사용 시 이미 설치됨):
+#    uv run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+#    → "2.x.x+cu12x"와 "True" 출력 시 3번 건너뛰기
+#    → "False" 또는 에러 시:
 #    uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 #
-# 3. Flash Attention (선택, 5-10분 소요):
+# 3. Flash Attention (선택, 학습 속도 20% 향상):
+#    ⚠️ 설치 시간: 5-15분 (GPU에 따라 다름)
+#    ⚠️ 설치 실패 시 eager attention으로 대체 가능 (성능 차이 미미)
+#    
+#    # 설치 시도:
 #    uv pip install flash-attn --no-build-isolation
+#    
+#    # 진행 상황 확인 (다른 터미널):
+#    top -p $(pgrep -f "pip install flash")
+#    # %CPU가 0%이고 5분 이상 지속 시 중단:
+#    kill -9 $(pgrep -f "pip install flash")
+#    
+#    # Eager attention으로 전환:
+#    sed -i 's/flash_attention_2/eager/' configs/training_config.yaml
 #
 # 4. 실행:
 #    uv run python scripts/train_grpo.py --config configs/training_config.yaml
+#
+# 💡 Tip: Flash Attention 없이도 학습 가능합니다.
+#         Eager attention 사용 시 속도는 20% 느리지만 안정적입니다.
 #
 # 상세 가이드: RUNPOD_SETUP.md
 

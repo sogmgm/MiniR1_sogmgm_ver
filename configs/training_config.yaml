@@ -5,7 +5,7 @@
 model:
   name: "Qwen/Qwen2.5-1.5B-Instruct"  # Use 1.5B for better GPU efficiency, or "Qwen/Qwen2.5-3B-Instruct"
   torch_dtype: "bfloat16"
-  attn_implementation: "flash_attention_2"  # Requires flash-attn package
+  attn_implementation: "eager"  # Use "flash_attention_2" if flash-attn is installed (20% faster)
   use_peft: true
   load_in_4bit: true  # QLoRA for memory efficiency
 

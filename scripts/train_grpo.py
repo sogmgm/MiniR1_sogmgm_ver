@@ -289,7 +289,7 @@ def main():
         model_name,
         quantization_config=bnb_config,
         device_map="auto",
-        torch_dtype=torch.bfloat16,
+        # torch_dtype is handled automatically by quantization_config
         attn_implementation=config['model'].get('attn_implementation', 'eager'),
     )
     
@@ -373,7 +373,7 @@ def main():
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,  # Changed from tokenizer to processing_class
         peft_config=peft_config,
         reward_funcs=[format_reward_func, equation_reward_func],
     )

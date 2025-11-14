@@ -48,23 +48,28 @@ def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
     Returns:
         Dictionary with prompt and metadata
     """
-    r1_prefix = [{
-        "role": "system",
-        "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
-      },
-      { 
-        "role": "user",
-        "content": f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 = 1 </answer>."
-      },
-      {
-        "role": "assistant",
-        "content": "Let me solve this step by step.\n<think>"
-      }]
+def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
+    """R1-style prompt - 수정된 버전"""
     
+    # assistant 메시지를 빼고 user 메시지만 사용
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a helpful assistant. You first think about the reasoning process in <think></think> tags and then provide the answer in <answer></answer> tags."
+        },
+        {
+            "role": "user",
+            "content": f"Using the numbers {numbers}, create an equation that equals {target}. "
+                      f"You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. "
+                      f"Think step by step in <think> tags, then provide your final equation in <answer> tags."
+        }
+    ]
+    
+    # continue_final_message 제거
     prompt = tokenizer.apply_chat_template(
-        r1_prefix,
+        messages,
         tokenize=False,
-        continue_final_message=True
+        add_generation_prompt=True  # ← 이것으로 변경
     )
     
     # Calculate token count

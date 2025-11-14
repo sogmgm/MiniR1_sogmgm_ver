@@ -173,36 +173,22 @@ def update_progress_md(step: int, metrics: dict, output_file: str = "PROGRESS.md
 
 class SampleSavingCallback(TrainerCallback):
     """
-    학습 중 생성 샘플을 주기적으로 저장하는 콜백
+    학습 중 생성 샘플을 주기적으로 저장하는 콜백 (5 step마다)
     """
-    def __init__(self, save_steps: int = 25, tokenizer=None, config=None):
+    def __init__(self, save_steps: int = 5, tokenizer=None, config=None):
         self.save_steps = save_steps
         self.tokenizer = tokenizer
         self.config = config
-        self.step_timings = {}  # 각 단계별 시간 기록
-    
-    def on_step_begin(self, args, state: TrainerState, control: TrainerControl, **kwargs):
-        """스텝 시작 시간 기록"""
-        self.step_timings[state.global_step] = {
-            'step_start': time.time()
-        }
-        return control
     
     def on_step_end(self, args, state: TrainerState, control: TrainerControl, **kwargs):
         """
-        각 스텝 종료 시 호출되어 샘플 저장 및 진행 상황 업데이트
+        각 스텝 종료 시 호출되어 샘플 생성 및 저장 (1, 5, 10, 15, ...)
         """
         step = state.global_step
         
-        # 시간 기록
-        if step in self.step_timings:
-            self.step_timings[step]['step_end'] = time.time()
-            step_time = self.step_timings[step]['step_end'] - self.step_timings[step]['step_start']
-            logger.info(f"⏱️  Step {step} completed in {step_time:.2f}s")
-        
-        # 샘플 저장
-        if step % self.save_steps == 0 and step > 0:
-            logger.info(f"📊 Step {step}: Triggering sample generation...")
+        # 1, 5, 10, 15, 20... 스텝에서 샘플 생성
+        if step == 1 or (step % self.save_steps == 0):
+            logger.info(f"📊 Step {step}: Generating sample...")
             
             # Trainer의 model과 tokenizer 사용
             model = kwargs.get('model', None)
@@ -211,43 +197,36 @@ class SampleSavingCallback(TrainerCallback):
         
         return control
     
-    def on_log(self, args, state: TrainerState, control: TrainerControl, logs=None, **kwargs):
-        """로그 출력 시 호출 - 메트릭 기록"""
-        if logs is not None:
-            step = state.global_step
-            
-            # 타이밍 정보와 메트릭 저장
-            timing_file = Path("logs/step_timings.jsonl")
-            timing_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            timing_data = {
-                "step": step,
-                "timestamp": datetime.now().isoformat(),
-                **logs
-            }
-            
-            if step in self.step_timings:
-                timing_data.update(self.step_timings[step])
-            
-            with open(timing_file, 'a') as f:
-                f.write(json.dumps(timing_data) + '\n')
-        
-        return control
-    
     def _generate_and_save_samples(self, model, step):
-        """모델에서 샘플 생성 및 저장"""
+        """모델에서 샘플 생성 및 저장 (프롬프트 포함)"""
         try:
             gen_start = time.time()
             
-            # 실제 학습 데이터와 동일한 형식의 프롬프트 사용
-            test_prompts = [
-                "<|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n<|im_start|>user\nUsing the numbers [75, 25, 3, 1, 7, 10], create an equation that equals 111. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 = 1 </answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>",
-                "<|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n<|im_start|>user\nUsing the numbers [100, 75, 50, 25, 6, 3], create an equation that equals 543. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 = 1 </answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>",
+            # 테스트 케이스 1개만 사용
+            test_case = {"numbers": [75, 25, 3, 1, 7, 10], "target": 111}
+            
+            # Chat template으로 프롬프트 생성
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant. You first think about the reasoning process in <think></think> tags and then provide the answer in <answer></answer> tags."
+                },
+                {
+                    "role": "user",
+                    "content": f"Using the numbers {test_case['numbers']}, create an equation that equals {test_case['target']}. "
+                            f"You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. "
+                            f"Think step by step in <think> tags, then provide your final equation in <answer> tags."
+                }
             ]
             
-            test_targets = [111, 543]
-            test_nums = [[75, 25, 3, 1, 7, 10], [100, 75, 50, 25, 6, 3]]
+            prompt = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+                enable_thinking=True
+            )
             
+            # 샘플 저장
             samples_dir = Path("logs/generation_samples")
             samples_dir.mkdir(parents=True, exist_ok=True)
             
@@ -255,48 +234,67 @@ class SampleSavingCallback(TrainerCallback):
             
             with open(sample_file, 'w', encoding='utf-8') as f:
                 f.write(f"{'='*80}\n")
-                f.write(f"Generation Samples - Step {step}\n")
+                f.write(f"Generation Sample - Step {step}\n")
                 f.write(f"Timestamp: {datetime.now().isoformat()}\n")
                 f.write(f"{'='*80}\n\n")
                 
-                for i, (prompt, target, nums) in enumerate(zip(test_prompts, test_targets, test_nums)):
-                    f.write(f"\n{'─'*80}\n")
-                    f.write(f"Sample {i+1}\n")
-                    f.write(f"{'─'*80}\n")
-                    f.write(f"Target: {target}\n")
-                    f.write(f"Numbers: {nums}\n\n")
-                    f.write(f"Prompt (last 100 chars):\n...{prompt[-100:]}\n\n")
-                    
-                    # 생성 시작
-                    inputs = self.tokenizer(prompt, return_tensors="pt").to(model.device)
-                    
-                    gen_sample_start = time.time()
-                    with torch.no_grad():
-                        outputs = model.generate(
-                            **inputs,
-                            max_new_tokens=512,
-                            temperature=0.7,
-                            top_p=0.9,
-                            top_k=50,
-                            do_sample=True,
-                            pad_token_id=self.tokenizer.pad_token_id,
-                        )
-                    gen_sample_time = time.time() - gen_sample_start
-                    
-                    generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-                    completion = generated_text[len(prompt):]
-                    
-                    f.write(f"Generated (in {gen_sample_time:.2f}s):\n{completion}\n\n")
+                f.write(f"Target: {test_case['target']}\n")
+                f.write(f"Numbers: {test_case['numbers']}\n\n")
+                
+                # 프롬프트 전체 출력
+                f.write(f"{'─'*80}\n")
+                f.write(f"PROMPT:\n")
+                f.write(f"{'─'*80}\n")
+                f.write(f"{prompt}\n\n")
+                
+                # 생성
+                inputs = self.tokenizer(prompt, return_tensors="pt").to(model.device)
+                
+                gen_sample_start = time.time()
+                with torch.no_grad():
+                    outputs = model.generate(
+                        **inputs,
+                        max_new_tokens=512,
+                        temperature=0.7,
+                        top_p=0.9,
+                        top_k=50,
+                        do_sample=True,
+                        pad_token_id=self.tokenizer.pad_token_id,
+                        eos_token_id=self.tokenizer.eos_token_id,
+                    )
+                gen_sample_time = time.time() - gen_sample_start
+                
+                full_output = self.tokenizer.decode(outputs[0], skip_special_tokens=False)
+                completion = full_output[len(prompt):]
+                
+                f.write(f"{'─'*80}\n")
+                f.write(f"GENERATED (in {gen_sample_time:.2f}s):\n")
+                f.write(f"{'─'*80}\n")
+                f.write(f"{completion}\n\n")
+                
+                # 보상 계산 (리스트로 전달해야 함)
+                format_rewards = format_reward_func([completion], [test_case['target']])
+                equation_rewards = equation_reward_func([completion], [test_case['target']], [test_case['numbers']])
+                format_reward = format_rewards[0]
+                equation_reward = equation_rewards[0]
+                total_reward = format_reward + equation_reward
+                
+                f.write(f"{'─'*80}\n")
+                f.write(f"REWARDS:\n")
+                f.write(f"{'─'*80}\n")
+                f.write(f"Format:   {format_reward:.2f}\n")
+                f.write(f"Equation: {equation_reward:.2f}\n")
+                f.write(f"Total:    {total_reward:.2f}\n")
+                f.write(f"Status:   {'✅ SUCCESS' if total_reward >= 1.8 else '❌ FAIL'}\n")
+                f.write(f"{'='*80}\n")
             
             gen_time = time.time() - gen_start
-            logger.info(f"✅ Saved generation samples to {sample_file} (took {gen_time:.2f}s)")
-            
-            # 타이밍 기록
-            if step in self.step_timings:
-                self.step_timings[step]['generation_time'] = gen_time
+            logger.info(f"✅ Step {step}: Sample saved (Reward: {total_reward:.2f}, Time: {gen_time:.2f}s)")
         
         except Exception as e:
-            logger.error(f"❌ Failed to generate samples: {e}")
+            logger.error(f"❌ Failed to generate sample at step {step}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
 
 
@@ -509,9 +507,9 @@ def main():
     trainer_creation_time = time.time() - trainer_creation_start
     logger.info(f"⏱️  Trainer created in {trainer_creation_time:.2f}s")
     
-    # 샘플 저장 콜백 추가
+    # 샘플 저장 콜백 추가 (5 step마다)
     sample_callback = SampleSavingCallback(
-        save_steps=config.get('sampling', {}).get('save_samples_every', 25),
+        save_steps=5,
         tokenizer=tokenizer,
         config=config
     )

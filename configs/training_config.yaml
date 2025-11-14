@@ -3,16 +3,16 @@
 
 # Model Configuration
 model:
-  name: "Qwen/Qwen2.5-1.5B-Instruct"  # Use 1.5B for better GPU efficiency, or "Qwen/Qwen2.5-3B-Instruct"
+  name: "Qwen/Qwen3-1.7B"  # Qwen3 latest model
   torch_dtype: "bfloat16"
   attn_implementation: "eager"  # Use "flash_attention_2" if flash-attn is installed (20% faster)
   use_peft: true
-  load_in_4bit: true  # QLoRA for memory efficiency
+  load_in_4bit: false  # A40 48GB에서는 full precision으로 더 빠름
 
 # PEFT/LoRA Configuration
 peft:
-  r: 16
-  lora_alpha: 32
+  r: 32  # A40에서는 더 큰 rank 사용 가능
+  lora_alpha: 64  # alpha = 2*r
   lora_dropout: 0.05
   target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
   task_type: "CAUSAL_LM"
@@ -20,26 +20,26 @@ peft:
 # Training Arguments
 training:
   output_dir: "checkpoints/qwen-r1-countdown"
-  learning_rate: 5.0e-7
+  learning_rate: 5.0e-7  # Phil Schmid's stable setting (was 1e-5, too high!)
   lr_scheduler_type: "cosine"
-  warmup_ratio: 0.05
+  warmup_ratio: 0.1  # Increased from 0.05 for more stable warmup
   
   # Steps and epochs
-  max_steps: 200  # Reduced from 450 for efficiency
-  logging_steps: 25  # TensorBoard 로깅 주기 (메모리 절약)
+  max_steps: 300  # Phil's full training (was 100, too short)
+  logging_steps: 10  # Frequent progress updates
   save_steps: 50
   eval_steps: 50
   
-  # Batch size configuration (optimized for low VRAM)
-  per_device_train_batch_size: 1
+  # Batch size configuration (optimized for A40 44GB with GRPO)
+  per_device_train_batch_size: 2  # GRPO는 4개 생성 * 2 = 8 샘플 처리
   per_device_eval_batch_size: 1
-  gradient_accumulation_steps: 8  # Effective batch size = 8
+  gradient_accumulation_steps: 2  # Effective batch = 4
   
   # Memory optimization
-  gradient_checkpointing: true
+  gradient_checkpointing: true  # GRPO에서는 메모리 절약 필요
   gradient_checkpointing_kwargs:
     use_reentrant: false
-  bf16: true
+  bf16: true  # A40은 bfloat16 하드웨어 가속 지원
   fp16: false
   
   # Training stability
@@ -57,27 +57,27 @@ training:
 
 # GRPO Specific Parameters
 grpo:
-  # Prompt and completion length (reduced for memory)
-  max_prompt_length: 256
-  max_completion_length: 512  # Reduced from 1024
+  # Prompt and completion length (balanced for quality and speed)
+  max_prompt_length: 256  # Reduced to allow more completion tokens
+  max_completion_length: 1024  # Increased to allow full reasoning with longer chains
   
   # Generation parameters
-  num_generations: 2  # Number of completions per prompt (lower = less memory)
+  num_generations: 4  # A40에서 병렬 생성 (Phil uses 8 on 4xH100)
   temperature: 0.7
   top_p: 0.9
   top_k: 50
   
   # GRPO hyperparameters
-  beta: 0.001  # KL divergence coefficient (lower = less constraint)
+  beta: 0.001  # Phil's stable KL coefficient (was 0.05, too high!)
   
   # Reward scaling
-  reward_scale: 1.0
+  reward_scale: 10.0  # Increased from 1.0 to make rewards more impactful
 
 # Dataset Configuration
 dataset:
   name: "Jiayi-Pan/Countdown-Tasks-3to4"
   split: "train"
-  num_samples: 5000  # Reduced from 50k for faster training
+  num_samples: 2500  # Reduced from 50k for faster training
   test_size: 0.1
   shuffle_seed: 42
   
@@ -93,11 +93,11 @@ rewards:
   equation_weight: 1.0
   
   # Combined reward type: "sum" or "product"
-  combination: "sum"
+  combination: "sum"  # Reverted - trainer handles them separately
 
 # Generation Sampling Configuration
 sampling:
-  save_samples_every: 25  # Save samples every N steps
+  save_samples_every: 5  # Save samples every N steps (더 자주 체크)
   num_samples_to_save: 10  # Number of samples to save per checkpoint
   save_successful_only: false  # Also save failed attempts for debugging
 

@@ -7,6 +7,7 @@ import argparse
 import json
 import logging
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 import yaml
@@ -174,18 +175,129 @@ class SampleSavingCallback(TrainerCallback):
     """
     학습 중 생성 샘플을 주기적으로 저장하는 콜백
     """
-    def __init__(self, save_steps: int = 25):
+    def __init__(self, save_steps: int = 25, tokenizer=None, config=None):
         self.save_steps = save_steps
+        self.tokenizer = tokenizer
+        self.config = config
+        self.step_timings = {}  # 각 단계별 시간 기록
+    
+    def on_step_begin(self, args, state: TrainerState, control: TrainerControl, **kwargs):
+        """스텝 시작 시간 기록"""
+        self.step_timings[state.global_step] = {
+            'step_start': time.time()
+        }
+        return control
     
     def on_step_end(self, args, state: TrainerState, control: TrainerControl, **kwargs):
         """
         각 스텝 종료 시 호출되어 샘플 저장 및 진행 상황 업데이트
         """
-        if state.global_step % self.save_steps == 0:
-            # 여기서는 로그만 찍고, 실제 샘플 저장은 trainer의 로그 콜백에서 처리
-            logger.info(f"Step {state.global_step}: Checkpoint for sample saving")
+        step = state.global_step
+        
+        # 시간 기록
+        if step in self.step_timings:
+            self.step_timings[step]['step_end'] = time.time()
+            step_time = self.step_timings[step]['step_end'] - self.step_timings[step]['step_start']
+            logger.info(f"⏱️  Step {step} completed in {step_time:.2f}s")
+        
+        # 샘플 저장
+        if step % self.save_steps == 0 and step > 0:
+            logger.info(f"📊 Step {step}: Triggering sample generation...")
+            
+            # Trainer의 model과 tokenizer 사용
+            model = kwargs.get('model', None)
+            if model is not None and self.tokenizer is not None:
+                self._generate_and_save_samples(model, step)
         
         return control
+    
+    def on_log(self, args, state: TrainerState, control: TrainerControl, logs=None, **kwargs):
+        """로그 출력 시 호출 - 메트릭 기록"""
+        if logs is not None:
+            step = state.global_step
+            
+            # 타이밍 정보와 메트릭 저장
+            timing_file = Path("logs/step_timings.jsonl")
+            timing_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            timing_data = {
+                "step": step,
+                "timestamp": datetime.now().isoformat(),
+                **logs
+            }
+            
+            if step in self.step_timings:
+                timing_data.update(self.step_timings[step])
+            
+            with open(timing_file, 'a') as f:
+                f.write(json.dumps(timing_data) + '\n')
+        
+        return control
+    
+    def _generate_and_save_samples(self, model, step):
+        """모델에서 샘플 생성 및 저장"""
+        try:
+            gen_start = time.time()
+            
+            # 실제 학습 데이터와 동일한 형식의 프롬프트 사용
+            test_prompts = [
+                "<|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n<|im_start|>user\nUsing the numbers [75, 25, 3, 1, 7, 10], create an equation that equals 111. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 = 1 </answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>",
+                "<|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n<|im_start|>user\nUsing the numbers [100, 75, 50, 25, 6, 3], create an equation that equals 543. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 = 1 </answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>",
+            ]
+            
+            test_targets = [111, 543]
+            test_nums = [[75, 25, 3, 1, 7, 10], [100, 75, 50, 25, 6, 3]]
+            
+            samples_dir = Path("logs/generation_samples")
+            samples_dir.mkdir(parents=True, exist_ok=True)
+            
+            sample_file = samples_dir / f"step_{step:05d}.txt"
+            
+            with open(sample_file, 'w', encoding='utf-8') as f:
+                f.write(f"{'='*80}\n")
+                f.write(f"Generation Samples - Step {step}\n")
+                f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                f.write(f"{'='*80}\n\n")
+                
+                for i, (prompt, target, nums) in enumerate(zip(test_prompts, test_targets, test_nums)):
+                    f.write(f"\n{'─'*80}\n")
+                    f.write(f"Sample {i+1}\n")
+                    f.write(f"{'─'*80}\n")
+                    f.write(f"Target: {target}\n")
+                    f.write(f"Numbers: {nums}\n\n")
+                    f.write(f"Prompt (last 100 chars):\n...{prompt[-100:]}\n\n")
+                    
+                    # 생성 시작
+                    inputs = self.tokenizer(prompt, return_tensors="pt").to(model.device)
+                    
+                    gen_sample_start = time.time()
+                    with torch.no_grad():
+                        outputs = model.generate(
+                            **inputs,
+                            max_new_tokens=512,
+                            temperature=0.7,
+                            top_p=0.9,
+                            top_k=50,
+                            do_sample=True,
+                            pad_token_id=self.tokenizer.pad_token_id,
+                        )
+                    gen_sample_time = time.time() - gen_sample_start
+                    
+                    generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+                    completion = generated_text[len(prompt):]
+                    
+                    f.write(f"Generated (in {gen_sample_time:.2f}s):\n{completion}\n\n")
+            
+            gen_time = time.time() - gen_start
+            logger.info(f"✅ Saved generation samples to {sample_file} (took {gen_time:.2f}s)")
+            
+            # 타이밍 기록
+            if step in self.step_timings:
+                self.step_timings[step]['generation_time'] = gen_time
+        
+        except Exception as e:
+            logger.error(f"❌ Failed to generate samples: {e}")
+
 
 
 def load_config(config_path: str) -> dict:
@@ -274,27 +386,39 @@ def main():
         tokenizer.pad_token = tokenizer.eos_token
     
     # Configure model with QLoRA
-    logger.info(f"Loading model {model_name} with 4-bit quantization")
+    logger.info(f"Loading model {model_name}")
     
-    from transformers import BitsAndBytesConfig
+    # A40 48GB에서는 full precision 사용 (4bit 양자화 제거)
+    load_in_4bit = config['model'].get('load_in_4bit', False)
     
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-        bnb_4bit_use_double_quant=True,
-    )
-    
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        quantization_config=bnb_config,
-        device_map="auto",
-        # torch_dtype is handled automatically by quantization_config
-        attn_implementation=config['model'].get('attn_implementation', 'eager'),
-    )
-    
-    # Prepare model for k-bit training
-    model = prepare_model_for_kbit_training(model)
+    if load_in_4bit:
+        logger.info("Loading model with 4-bit quantization")
+        from transformers import BitsAndBytesConfig
+        
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
+        )
+        
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            quantization_config=bnb_config,
+            device_map="auto",
+            attn_implementation=config['model'].get('attn_implementation', 'eager'),
+        )
+        
+        # Prepare model for k-bit training
+        model = prepare_model_for_kbit_training(model)
+    else:
+        logger.info("Loading model with full precision (optimized for A40 48GB)")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            attn_implementation=config['model'].get('attn_implementation', 'eager'),
+        )
     
     # Configure LoRA
     peft_config_dict = config.get('peft', {})
@@ -368,6 +492,10 @@ def main():
     
     # Create trainer
     logger.info("Creating GRPO Trainer")
+    
+    # 타이밍 측정 시작
+    trainer_creation_start = time.time()
+    
     trainer = GRPOTrainer(
         model=model,
         args=training_args,
@@ -378,22 +506,48 @@ def main():
         reward_funcs=[format_reward_func, equation_reward_func],
     )
     
+    trainer_creation_time = time.time() - trainer_creation_start
+    logger.info(f"⏱️  Trainer created in {trainer_creation_time:.2f}s")
+    
+    # 샘플 저장 콜백 추가
+    sample_callback = SampleSavingCallback(
+        save_steps=config.get('sampling', {}).get('save_samples_every', 25),
+        tokenizer=tokenizer,
+        config=config
+    )
+    trainer.add_callback(sample_callback)
+    
     # Check GPU memory
     if torch.cuda.is_available():
-        logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
-        logger.info(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+        logger.info(f"🖥️  GPU: {torch.cuda.get_device_name(0)}")
+        logger.info(f"💾 GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+        logger.info(f"📊 GPU Memory Allocated: {torch.cuda.memory_allocated(0) / 1024**3:.2f} GB")
+        logger.info(f"📊 GPU Memory Reserved: {torch.cuda.memory_reserved(0) / 1024**3:.2f} GB")
     
     # Train
-    logger.info("Starting training...")
+    logger.info("🚀 Starting training...")
+    training_start_time = time.time()
+    
     try:
         trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
         
+        training_total_time = time.time() - training_start_time
+        logger.info(f"⏱️  Total training time: {training_total_time / 60:.2f} minutes")
+        
         # Save final model
-        logger.info("Saving final model...")
+        logger.info("💾 Saving final model...")
+        save_start = time.time()
         trainer.save_model(training_args.output_dir)
         tokenizer.save_pretrained(training_args.output_dir)
+        save_time = time.time() - save_start
+        logger.info(f"✅ Model saved in {save_time:.2f}s")
         
-        logger.info("Training completed successfully!")
+        logger.info("✨ Training completed successfully!")
+        
+        # 최종 GPU 메모리 상태
+        if torch.cuda.is_available():
+            logger.info(f"📊 Final GPU Memory Allocated: {torch.cuda.memory_allocated(0) / 1024**3:.2f} GB")
+            logger.info(f"📊 Final GPU Memory Reserved: {torch.cuda.memory_reserved(0) / 1024**3:.2f} GB")
         
     except Exception as e:
         logger.error(f"Training failed with error: {e}")

@@ -65,26 +65,31 @@ def format_reward_func(completions: List[str], target: List[str], **kwargs) -> L
     
     for completion in completions:
         try:
-            # Step 1: 프롬프트에 이미 "<think>"가 포함되어 있으므로 합성적으로 추가
-            # (모델은 "Let me think..." 부터 생성하기 시작함)
-            completion = "<think>" + completion
+            # 프롬프트가 이미 '<think>'로 끝나므로 모델은 그 이후부터 생성
+            # completion에 <think>를 추가하지 않음!
+            # 대신 </think>와 <answer> 태그가 올바르게 있는지만 확인
             
-            # Step 2: 정규식으로 형식 검사
-            # - <think>로 시작
-            # - 중간에 다른 <think> 태그가 중첩되면 안 됨
-            # - </think> 후 개행
-            # - <answer>와 </answer>로 감싸진 답변
-            # - 모든 것이 순서대로 나타나야 함
-            regex = r"^<think>([^<]*(?:<(?!/?think>)[^<]*)*)<\/think>\n<answer>([\s\S]*?)<\/answer>$"
-            match = re.search(regex, completion, re.DOTALL)
-            
-            # Step 3: 형식 체크
-            if match is None or len(match.groups()) != 2:
-                # 형식이 맞지 않으면 보상 0.0
+            # Step 1: </think> 태그가 있는지 확인
+            if "</think>" not in completion:
                 rewards.append(0.0)
-            else:
-                # 형식이 올바르면 보상 1.0
-                rewards.append(1.0)
+                continue
+            
+            # Step 2: <answer> ... </answer> 태그가 있는지 확인
+            answer_match = re.search(r"<answer>(.*?)</answer>", completion, re.DOTALL)
+            if answer_match is None:
+                rewards.append(0.0)
+                continue
+            
+            # Step 3: </think>가 <answer>보다 먼저 나오는지 확인
+            think_end_pos = completion.find("</think>")
+            answer_start_pos = completion.find("<answer>")
+            
+            if think_end_pos == -1 or answer_start_pos == -1 or think_end_pos >= answer_start_pos:
+                rewards.append(0.0)
+                continue
+            
+            # 모든 조건을 만족하면 보상 1.0
+            rewards.append(1.0)
                 
         except Exception:
             # 에러 발생 시 보상 0.0
@@ -145,31 +150,30 @@ def equation_reward_func(
     
     for completion, gt, numbers in zip(completions, target, nums):
         try:
-            # Step 1: 합성 <think> 태그 추가
-            completion = "<think>" + completion
+            # 프롬프트가 이미 '<think>'로 끝나므로 completion에 추가하지 않음
             
-            # Step 2: <answer> 태그에서 수식 추출
+            # Step 1: <answer> 태그에서 수식 추출
             match = re.search(r"<answer>(.*?)<\/answer>", completion)
             if match is None:
                 # <answer> 태그가 없으면 보상 0.0
                 rewards.append(0.0)
                 continue
             
-            # Step 3: 수식 가져오기
+            # Step 2: 수식 가져오기
             equation = match.group(1).strip()
             
-            # Step 4: 수식에서 모든 숫자 추출
+            # Step 3: 수식에서 모든 숫자 추출
             # 예: "55 + 36 - 7 - 19" → [55, 36, 7, 19]
             used_numbers = [int(n) for n in re.findall(r'\d+', equation)]
             
-            # Step 5: 주어진 숫자를 정확히 한 번씩만 사용했는지 확인
+            # Step 4: 주어진 숫자를 정확히 한 번씩만 사용했는지 확인
             # sorted([55, 36, 7, 19]) == sorted([19, 36, 55, 7]) ✓
             if sorted(used_numbers) != sorted(numbers):
                 # 숫자를 잘못 사용했으면 보상 0.0
                 rewards.append(0.0)
                 continue
             
-            # Step 6: 허용된 문자만 사용했는지 확인
+            # Step 5: 허용된 문자만 사용했는지 확인
             # 허용: 숫자, +, -, *, /, (, ), 소수점, 공백
             allowed_pattern = r'^[\d+\-*/().\s]+$'
             if not re.match(allowed_pattern, equation):
@@ -177,12 +181,12 @@ def equation_reward_func(
                 rewards.append(0.0)
                 continue
             
-            # Step 7: 수식을 안전하게 계산
+            # Step 6: 수식을 안전하게 계산
             # eval()을 사용하지만 __builtins__를 제한하여 안전하게 실행
             # 예: "55 + 36 - 7 - 19" → 65
             result = eval(equation, {"__builtins__": None}, {})
             
-            # Step 8: 계산 결과가 목표값과 일치하는지 확인 (부동소수점 오차 허용)
+            # Step 7: 계산 결과가 목표값과 일치하는지 확인 (부동소수점 오차 허용)
             # abs(65.0 - 65) < 0.00001 ✓
             if abs(float(result) - float(gt)) < 1e-5:
                 # 정답! 보상 1.0

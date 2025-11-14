@@ -48,24 +48,18 @@ def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
     Returns:
         Dictionary with prompt and metadata
     """
-    r1_prefix = [
-        {
-            "role": "system",
-            "content": "You are a helpful assistant. You first think about the reasoning process in the mind and then provide the user with the answer."
-        },
-        {
-            "role": "user",
-            "content": f"Using the numbers {numbers}, create an equation that equals {target}. "
-                      f"You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. "
-                      f"Show your work in <think> </think> tags. "
-                      f"And return the final equation and answer in <answer> </answer> tags, "
-                      f"for example <answer> (1 + 2) / 3 = 1 </answer>."
-        },
-        {
-            "role": "assistant",
-            "content": "Let me solve this step by step.\n<think>"
-        }
-    ]
+    r1_prefix = [{
+        "role": "system",
+        "content": "You are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer."
+      },
+      { 
+        "role": "user",
+        "content": f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 = 1 </answer>."
+      },
+      {
+        "role": "assistant",
+        "content": "Let me solve this step by step.\n<think>"
+      }]
     
     prompt = tokenizer.apply_chat_template(
         r1_prefix,
@@ -73,16 +67,21 @@ def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
         continue_final_message=True
     )
     
+    # Calculate token count
+    tokens = tokenizer.encode(prompt)
+    token_count = len(tokens)
+    
     return {
         "prompt": prompt,
         "target": target,
-        "nums": numbers
+        "nums": numbers,
+        "prompt_tokens": token_count
     }
 
 
 def prepare_dataset(
     dataset_name: str = "Jiayi-Pan/Countdown-Tasks-3to4",
-    num_samples: int = 5000,
+    num_samples: int = 2500,
     test_size: float = 0.1,
     seed: int = 42,
     output_dir: str = ".cache/datasets",
@@ -168,8 +167,20 @@ def prepare_dataset(
     example = train_data[0]
     print(f"Target: {example['target']}")
     print(f"Numbers: {example['nums']}")
+    print(f"Prompt tokens: {example['prompt_tokens']}")
     print(f"\nPrompt:\n{example['prompt']}")
     print("="*80)
+    
+    # Calculate average token count
+    avg_tokens = sum(d['prompt_tokens'] for d in train_data) / len(train_data)
+    max_tokens = max(d['prompt_tokens'] for d in train_data)
+    min_tokens = min(d['prompt_tokens'] for d in train_data)
+    
+    print(f"\n📊 TOKEN STATISTICS:")
+    print(f"  Average: {avg_tokens:.1f} tokens")
+    print(f"  Min: {min_tokens} tokens")
+    print(f"  Max: {max_tokens} tokens")
+    print(f"  max_prompt_length setting: Check training_config.yaml")
     
     print(f"\n✓ Dataset preparation complete!")
     print(f"  Train: {train_file}")

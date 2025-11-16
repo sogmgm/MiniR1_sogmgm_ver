@@ -198,14 +198,16 @@ class SampleSavingCallback(TrainerCallback):
         return control
     
     def _generate_and_save_samples(self, model, step):
-        """모델에서 샘플 생성 및 저장 (프롬프트 포함)"""
+        """모델에서 샘플 생성 및 저장 (프롬프트 통일)"""
         try:
-            gen_start = time.time()
+            gen_start = time.time()  # 타이머 시작
             
-            # 테스트 케이스 1개만 사용
+            # ✅ 중요: 모델을 eval mode로 전환
+            was_training = model.training
+            model.eval()
+            
             test_case = {"numbers": [75, 25, 3, 1, 7, 10], "target": 111}
             
-            # Chat template으로 프롬프트 생성
             messages = [
                 {
                     "role": "system",
@@ -219,11 +221,11 @@ class SampleSavingCallback(TrainerCallback):
                 }
             ]
             
+            # ✅ 수정: enable_thinking 제거 (데이터셋과 동일하게)
             prompt = self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
-                add_generation_prompt=True,
-                enable_thinking=True
+                add_generation_prompt=True  # enable_thinking=True 제거!
             )
             
             # 샘플 저장
@@ -259,6 +261,8 @@ class SampleSavingCallback(TrainerCallback):
                         top_p=0.9,
                         top_k=50,
                         do_sample=True,
+                        repetition_penalty=1.1,      # 🔥 반복 방지 추가
+                        no_repeat_ngram_size=2,      # 2-gram 반복 방지
                         pad_token_id=self.tokenizer.pad_token_id,
                         eos_token_id=self.tokenizer.eos_token_id,
                     )
@@ -287,6 +291,10 @@ class SampleSavingCallback(TrainerCallback):
                 f.write(f"Total:    {total_reward:.2f}\n")
                 f.write(f"Status:   {'✅ SUCCESS' if total_reward >= 1.8 else '❌ FAIL'}\n")
                 f.write(f"{'='*80}\n")
+            
+            # ✅ 모델을 원래 상태로 복원
+            if was_training:
+                model.train()
             
             gen_time = time.time() - gen_start
             logger.info(f"✅ Step {step}: Sample saved (Reward: {total_reward:.2f}, Time: {gen_time:.2f}s)")
@@ -417,6 +425,13 @@ def main():
             device_map="auto",
             attn_implementation=config['model'].get('attn_implementation', 'eager'),
         )
+    
+    # ✅ Vocab size 불일치 수정 (중요!)
+    if len(tokenizer) != model.config.vocab_size:
+        logger.warning(f"Vocab size mismatch: Tokenizer={len(tokenizer)}, Model={model.config.vocab_size}")
+        logger.info("Resizing model embeddings to match tokenizer...")
+        model.resize_token_embeddings(len(tokenizer))
+        logger.info(f"✓ Model embeddings resized to {len(tokenizer)}")
     
     # Configure LoRA
     peft_config_dict = config.get('peft', {})

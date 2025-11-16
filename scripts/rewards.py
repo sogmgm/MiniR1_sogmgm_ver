@@ -38,61 +38,47 @@ from typing import List
 def format_reward_func(completions: List[str], target: List[str], **kwargs) -> List[float]:
     """
     포맷 보상 함수: 생성된 텍스트가 올바른 형식을 따르는지 검사
-    
-    올바른 형식:
-    <think>
-    여기에 추론 과정...
-    </think>
-    <answer> 최종 수식 </answer>
-    
-    예시:
-    ✅ 올바른 형식:
-    "Let me think... </think>\n<answer> 55 + 36 - 7 - 19 </answer>"
-    
-    ❌ 잘못된 형식:
-    "The answer is 55 + 36 - 7 - 19"  (태그 없음)
-    "<think> ... <think> ... </think></think><answer>...</answer>"  (중첩된 태그)
-    
-    Args:
-        completions: 모델이 생성한 텍스트 리스트
-        target: 목표 숫자 리스트 (이 함수에서는 사용 안 함)
-        **kwargs: 추가 인자
-    
-    Returns:
-        각 completion에 대한 보상 점수 리스트 (1.0 = 올바름, 0.0 = 잘못됨)
-    """
+        """
     rewards = []
     
     for completion in completions:
         try:
-            # 프롬프트가 이미 '<think>'로 끝나므로 모델은 그 이후부터 생성
-            # completion에 <think>를 추가하지 않음!
-            # 대신 </think>와 <answer> 태그가 올바르게 있는지만 확인
+            # ✅ Step 1: <think> 태그로 시작하는지 확인
+            if not completion.strip().startswith("<think>"):
+                rewards.append(0.0)
+                continue
             
-            # Step 1: </think> 태그가 있는지 확인
+            # ✅ Step 2: </think> 태그가 있는지 확인
             if "</think>" not in completion:
                 rewards.append(0.0)
                 continue
             
-            # Step 2: <answer> ... </answer> 태그가 있는지 확인
+            # ✅ Step 3: <answer> ... </answer> 태그가 있는지 확인
             answer_match = re.search(r"<answer>(.*?)</answer>", completion, re.DOTALL)
             if answer_match is None:
                 rewards.append(0.0)
                 continue
             
-            # Step 3: </think>가 <answer>보다 먼저 나오는지 확인
-            think_end_pos = completion.find("</think>")
-            answer_start_pos = completion.find("<answer>")
+            # ✅ Step 4: 순서 확인 (<think> → </think> → <answer>)
+            think_start = completion.find("<think>")
+            think_end = completion.find("</think>")
+            answer_start = completion.find("<answer>")
+            answer_end = completion.find("</answer>")
             
-            if think_end_pos == -1 or answer_start_pos == -1 or think_end_pos >= answer_start_pos:
+            if not (think_start < think_end < answer_start < answer_end):
                 rewards.append(0.0)
+                continue
+            
+            # ✅ Step 5: </answer> 이후 의미 없는 텍스트가 너무 많으면 감점
+            after_answer = completion[answer_end + 9:].strip()  # "</answer>" 길이 = 9
+            if len(after_answer) > 50:  # 50자 이상이면 불필요한 생성
+                rewards.append(0.5)  # 부분 점수
                 continue
             
             # 모든 조건을 만족하면 보상 1.0
             rewards.append(1.0)
                 
         except Exception:
-            # 에러 발생 시 보상 0.0
             rewards.append(0.0)
     
     return rewards

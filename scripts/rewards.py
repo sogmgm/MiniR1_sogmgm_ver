@@ -37,29 +37,39 @@ from typing import List
 
 def format_reward_func(completions: List[str], target: List[str], **kwargs) -> List[float]:
     """
-    포맷 보상 함수: 생성된 텍스트가 올바른 형식을 따르는지 검사
-        """
+    Format reward function - microR1 style (strict binary check)
+    
+    Check if the generated text follows the correct format:
+    - Starts with <think>
+    - Contains </think>
+    - Contains <answer> ... </answer>
+    - Proper order: <think> → </think> → <answer> → </answer>
+    - Pattern appears exactly 2 times (system + response)
+    
+    Returns:
+        1.0 if format is correct, 0.0 otherwise
+    """
     rewards = []
     
     for completion in completions:
         try:
-            # ✅ Step 1: <think> 태그로 시작하는지 확인
+            # Step 1: Check if starts with <think>
             if not completion.strip().startswith("<think>"):
                 rewards.append(0.0)
                 continue
             
-            # ✅ Step 2: </think> 태그가 있는지 확인
+            # Step 2: Check for </think>
             if "</think>" not in completion:
                 rewards.append(0.0)
                 continue
             
-            # ✅ Step 3: <answer> ... </answer> 태그가 있는지 확인
+            # Step 3: Check for <answer> ... </answer>
             answer_match = re.search(r"<answer>(.*?)</answer>", completion, re.DOTALL)
             if answer_match is None:
                 rewards.append(0.0)
                 continue
             
-            # ✅ Step 4: 순서 확인 (<think> → </think> → <answer>)
+            # Step 4: Check order (<think> → </think> → <answer>)
             think_start = completion.find("<think>")
             think_end = completion.find("</think>")
             answer_start = completion.find("<answer>")
@@ -69,13 +79,7 @@ def format_reward_func(completions: List[str], target: List[str], **kwargs) -> L
                 rewards.append(0.0)
                 continue
             
-            # ✅ Step 5: </answer> 이후 의미 없는 텍스트가 너무 많으면 감점
-            after_answer = completion[answer_end + 9:].strip()  # "</answer>" 길이 = 9
-            if len(after_answer) > 50:  # 50자 이상이면 불필요한 생성
-                rewards.append(0.5)  # 부분 점수
-                continue
-            
-            # 모든 조건을 만족하면 보상 1.0
+            # All conditions met - binary reward
             rewards.append(1.0)
                 
         except Exception:
@@ -91,99 +95,88 @@ def equation_reward_func(
     **kwargs
 ) -> List[float]:
     """
-    수식 정확성 보상 함수: 생성된 수식이 수학적으로 올바르고 정답인지 검사
+    Equation correctness reward function - microR1 style (strict binary check)
     
-    검사 항목:
-    1. <answer> 태그 안에 수식이 있는가?
-    2. 주어진 숫자를 정확히 한 번씩만 사용했는가?
-    3. 허용된 연산자만 사용했는가? (+, -, *, /, 괄호, 소수점)
-    4. 수식을 계산했을 때 목표 숫자와 일치하는가?
-    
-    예시:
-    ✅ 정답:
-    - 숫자: [19, 36, 55, 7], 목표: 65
-    - 수식: "55 + 36 - 7 - 19"
-    - 계산: 55 + 36 - 7 - 19 = 65 ✓
-    - 모든 숫자 사용 ✓
-    - 보상: 1.0
-    
-    ❌ 오답 예시 1 (계산 틀림):
-    - 숫자: [19, 36, 55, 7], 목표: 65
-    - 수식: "55 + 36 - 7 - 18"  (18은 주어지지 않은 숫자)
-    - 보상: 0.0
-    
-    ❌ 오답 예시 2 (숫자 누락):
-    - 숫자: [19, 36, 55, 7], 목표: 65
-    - 수식: "55 + 36 - 7"  (19를 사용 안 함)
-    - 보상: 0.0
-    
-    ❌ 오답 예시 3 (결과 틀림):
-    - 숫자: [19, 36, 55, 7], 목표: 65
-    - 수식: "55 + 36 + 7 - 19"
-    - 계산: 79 ≠ 65 ✗
-    - 보상: 0.0
-    
-    Args:
-        completions: 모델이 생성한 텍스트 리스트
-        target: 목표 숫자 리스트
-        nums: 각 문제에 사용 가능한 숫자 리스트
-        **kwargs: 추가 인자
+    Check if the generated equation is mathematically correct:
+    - All and only given numbers are used
+    - No equals sign in answer
+    - Result equals target
     
     Returns:
-        각 completion에 대한 보상 점수 리스트 (1.0 = 정답, 0.0 = 오답)
+        1.0 if equation is correct, 0.0 otherwise
+    
+    Example:
+    ✅ Correct (1.0):
+    - Numbers: [19, 36, 55, 7], Target: 65
+    - Equation: "55 + 36 - 7 - 19"
+    - Result: 55 + 36 - 7 - 19 = 65 ✓
+    
+    ❌ Wrong (0.0):
+    - Missing number: "55 + 36 - 7" (19 not used)
+    - Extra number: "55 + 36 - 7 - 18" (18 not given)
+    - Wrong result: "55 + 36 + 7 - 19" = 79 ≠ 65
+    - Has equals sign: "55 + 36 - 7 - 19 = 65"
+    
+    Args:
+        completions: List of generated text
+        target: List of target numbers
+        nums: List of available numbers for each problem
+        **kwargs: Additional arguments
+    
+    Returns:
+        List of reward scores (1.0 or 0.0)
     """
     rewards = []
     
     for completion, gt, numbers in zip(completions, target, nums):
         try:
-            # 프롬프트가 이미 '<think>'로 끝나므로 completion에 추가하지 않음
-            
-            # Step 1: <answer> 태그에서 수식 추출
-            match = re.search(r"<answer>(.*?)<\/answer>", completion)
+            # Step 1: Extract equation from <answer> tag
+            match = re.search(r"<answer>(.*?)<\/answer>", completion, re.DOTALL)
             if match is None:
-                # <answer> 태그가 없으면 보상 0.0
                 rewards.append(0.0)
                 continue
             
-            # Step 2: 수식 가져오기
             equation = match.group(1).strip()
             
-            # Step 3: 수식에서 모든 숫자 추출
-            # 예: "55 + 36 - 7 - 19" → [55, 36, 7, 19]
-            used_numbers = [int(n) for n in re.findall(r'\d+', equation)]
-            
-            # Step 4: 주어진 숫자를 정확히 한 번씩만 사용했는지 확인
-            # sorted([55, 36, 7, 19]) == sorted([19, 36, 55, 7]) ✓
-            if sorted(used_numbers) != sorted(numbers):
-                # 숫자를 잘못 사용했으면 보상 0.0
+            # Step 2: Check for equals sign
+            if '=' in equation:
                 rewards.append(0.0)
                 continue
             
-            # Step 5: 허용된 문자만 사용했는지 확인
-            # 허용: 숫자, +, -, *, /, (, ), 소수점, 공백
+            # Step 3: Extract all numbers from equation
+            used_numbers = []
+            for n in re.findall(r'-?\d+', equation):
+                num = int(n)
+                used_numbers.append(abs(num))
+            
+            # Step 4: Check if all and only given numbers are used
+            if sorted(used_numbers) != sorted(numbers):
+                rewards.append(0.0)
+                continue
+            
+            # Step 5: Validate allowed characters
             allowed_pattern = r'^[\d+\-*/().\s]+$'
             if not re.match(allowed_pattern, equation):
-                # 허용되지 않은 문자 사용 시 보상 0.0
                 rewards.append(0.0)
                 continue
             
-            # Step 6: 수식을 안전하게 계산
-            # eval()을 사용하지만 __builtins__를 제한하여 안전하게 실행
-            # 예: "55 + 36 - 7 - 19" → 65
-            result = eval(equation, {"__builtins__": None}, {})
-            
-            # Step 7: 계산 결과가 목표값과 일치하는지 확인 (부동소수점 오차 허용)
-            # abs(65.0 - 65) < 0.00001 ✓
-            if abs(float(result) - float(gt)) < 1e-5:
-                # 정답! 보상 1.0
-                rewards.append(1.0)
-            else:
-                # 계산 결과가 틀렸으면 보상 0.0
+            # Step 6: Evaluate equation
+            try:
+                result = eval(equation, {"__builtins__": None}, {})
+                result_float = float(result)
+                target_float = float(gt)
+                
+                # Step 7: Check if result matches target
+                if abs(result_float - target_float) < 1e-5:
+                    rewards.append(1.0)
+                else:
+                    rewards.append(0.0)
+                
+            except Exception:
+                # Evaluation error (division by zero, etc.)
                 rewards.append(0.0)
                 
         except Exception:
-            # 어떤 에러든 발생하면 보상 0.0
-            # (예: eval 에러, 0으로 나누기, 형변환 에러 등)
             rewards.append(0.0)
     
     return rewards

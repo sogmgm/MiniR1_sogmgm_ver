@@ -3,67 +3,68 @@
 
 # Model Configuration
 model:
-  name: "Qwen/Qwen2.5-1.5B-Instruct"  # 안정적인 Qwen 2.5 사용
+  name: "Qwen/Qwen3-4B"  # 4B 모델 + LoRA
   torch_dtype: "bfloat16"
   attn_implementation: "eager"  # Flash Attention 없음 - eager 사용
-  use_peft: true
-  load_in_4bit: false  # 양자화 완전히 끄기
-  load_in_8bit: false  # 양자화 완전히 끄기
+  use_peft: true  # ✅ LoRA ON
+  load_in_4bit: false  # 양자화 끄기
+  load_in_8bit: false  # 양자화 끄기
+  model_suffix: "4b_lora"  # 파일명에 추가할 suffix
 
 # PEFT/LoRA Configuration
 peft:
-  r: 32  # A40에서는 더 큰 rank 사용 가능
-  lora_alpha: 64  # alpha = 2*r
+  r: 64  # rank 증가 (32→64, 4B에 맞춤)
+  lora_alpha: 128  # alpha = 2*r
   lora_dropout: 0.05
   target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
   task_type: "CAUSAL_LM"
 
 # Training Arguments
 training:
-  output_dir: "checkpoints/qwen-r1-countdown"
-  learning_rate: 1.0e-6  # 안정적인 학습률 (5e-7에서 상향)
+  output_dir: "checkpoints/qwen-4b-lora"  # 4B LoRA 체크포인트
+  learning_rate: 5.0e-6  # LoRA는 더 높은 LR (5e-7 → 5e-6)
   lr_scheduler_type: "cosine"
   warmup_ratio: 0.1
   
   # Steps and epochs
-  max_steps: 300  # Phil's full training (was 100, too short)
-  logging_steps: 10  # Frequent progress updates
+  max_steps: 500  # ✅ Full 학습
+  logging_steps: 1  # 더 자주 로깅
   save_steps: 50
   eval_steps: 50
   
-  # Batch size configuration (optimized for A40 44GB with GRPO)
-  per_device_train_batch_size: 2  # GRPO는 4개 생성 * 2 = 8 샘플 처리
+  # Batch size configuration
+  per_device_train_batch_size: 1
   per_device_eval_batch_size: 1
-  gradient_accumulation_steps: 2  # Effective batch = 4
+  gradient_accumulation_steps: 4  # 8→4 (4B+LoRA는 메모리 여유)
   
   # Memory optimization
-  gradient_checkpointing: true  # GRPO에서는 메모리 절약 필요
+  gradient_checkpointing: true
   gradient_checkpointing_kwargs:
     use_reentrant: false
   bf16: true  # A40은 bfloat16 하드웨어 가속 지원
   fp16: false
   
   # Training stability
-  max_grad_norm: 1.0
+  max_grad_norm: 1.0  # 0.5→1.0 (LoRA는 더 크게)
   optim: "adamw_torch"
   weight_decay: 0.01
   
   # Logging
-  logging_dir: "logs/tensorboard"
-  report_to: ["tensorboard"]  # TensorBoard 활성화 (가벼운 설정)
+  logging_dir: "logs/tensorboard_4b_lora"
+  report_to: ["tensorboard"]
   
   # Checkpointing
-  save_total_limit: 4
+  save_total_limit: 2  # 4→2 (체크포인트 크기 때문)
   load_best_model_at_end: false
 
 # GRPO Specific Parameters
 grpo:
-  # Prompt and completion length (balanced for quality and speed)
-  max_prompt_length: 256  # Reduced to allow more completion tokens
-  max_completion_length: 1024  # Increased to allow full reasoning with longer chains
+  # Prompt and completion length
+  max_prompt_length: 256
+  max_completion_length: 512  # 1024→512 (microR1 스타일, 간결하게)
   
   # Generation parameters
-  num_generations: 4
+  num_generations: 4  # 8→4 (4B는 4개로 충분)
   temperature: 0.7
   top_p: 0.9
   top_k: 50

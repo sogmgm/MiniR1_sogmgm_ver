@@ -232,7 +232,12 @@ class SampleSavingCallback(TrainerCallback):
             samples_dir = Path("logs/generation_samples")
             samples_dir.mkdir(parents=True, exist_ok=True)
             
-            sample_file = samples_dir / f"step_{step:05d}.txt"
+            # ✅ 모델 크기와 학습 방법을 파일명에 포함
+            model_suffix = self.config.get('model', {}).get('model_suffix', '')
+            if model_suffix:
+                sample_file = samples_dir / f"step_{step:05d}_{model_suffix}.txt"
+            else:
+                sample_file = samples_dir / f"step_{step:05d}.txt"
             
             with open(sample_file, 'w', encoding='utf-8') as f:
                 f.write(f"{'='*80}\n")
@@ -391,6 +396,12 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
+    # ✅ LoRA on/off 설정
+    use_peft = config['model'].get('use_peft', True)
+    logger.info(f"{'='*80}")
+    logger.info(f"TRAINING MODE: {'LoRA (PEFT)' if use_peft else 'Full Fine-tuning'}")
+    logger.info(f"{'='*80}")
+    
     # Configure model with QLoRA
     logger.info(f"Loading model {model_name}")
     
@@ -433,17 +444,22 @@ def main():
         model.resize_token_embeddings(len(tokenizer))
         logger.info(f"✓ Model embeddings resized to {len(tokenizer)}")
     
-    # Configure LoRA
-    peft_config_dict = config.get('peft', {})
-    peft_config = LoraConfig(
-        r=peft_config_dict.get('r', 16),
-        lora_alpha=peft_config_dict.get('lora_alpha', 32),
-        lora_dropout=peft_config_dict.get('lora_dropout', 0.05),
-        target_modules=peft_config_dict.get('target_modules', None),
-        task_type=peft_config_dict.get('task_type', "CAUSAL_LM"),
-    )
-    
-    logger.info(f"LoRA config: r={peft_config.r}, alpha={peft_config.lora_alpha}")
+    # ✅ LoRA 설정 (use_peft=True일 때만)
+    if use_peft:
+        logger.info("🔧 Configuring LoRA...")
+        peft_config_dict = config.get('peft', {})
+        peft_config = LoraConfig(
+            r=peft_config_dict.get('r', 16),
+            lora_alpha=peft_config_dict.get('lora_alpha', 32),
+            lora_dropout=peft_config_dict.get('lora_dropout', 0.05),
+            target_modules=peft_config_dict.get('target_modules', None),
+            task_type=peft_config_dict.get('task_type', "CAUSAL_LM"),
+        )
+        logger.info(f"✅ LoRA enabled: r={peft_config.r}, alpha={peft_config.lora_alpha}")
+    else:
+        logger.info("⚠️  LoRA disabled - Full Fine-tuning mode")
+        logger.info(f"   Total parameters: {model.num_parameters():,}")
+        peft_config = None
     
     # Configure GRPO training arguments
     training_config = config['training']
@@ -515,7 +531,7 @@ def main():
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
         processing_class=tokenizer,  # Changed from tokenizer to processing_class
-        peft_config=peft_config,
+        peft_config=peft_config if use_peft else None,  # ✅ LoRA off시 None 전달
         reward_funcs=[format_reward_func, equation_reward_func],
     )
     

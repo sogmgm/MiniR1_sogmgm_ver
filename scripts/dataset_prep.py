@@ -38,7 +38,7 @@ from tqdm import tqdm
 
 def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
     """
-    Generate R1-style prompt with <think> prefix
+    Generate R1-style prompt - microR1 style (simple and clear)
     
     Args:
         numbers: List of available numbers
@@ -48,28 +48,23 @@ def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
     Returns:
         Dictionary with prompt and metadata
     """
-def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
-    """R1-style prompt - 수정된 버전"""
-    
-    # assistant 메시지를 빼고 user 메시지만 사용
+    # Simple prompt - microR1 style
     messages = [
         {
             "role": "system",
-            "content": "You are a helpful assistant. You first think about the reasoning process in <think></think> tags and then provide the answer in <answer></answer> tags."
+            "content": "Respond in the following format: <think> ... </think> <answer> ... </answer>"
         },
         {
             "role": "user",
-            "content": f"Using the numbers {numbers}, create an equation that equals {target}. "
-                      f"You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. "
-                      f"Think step by step in <think> tags, then provide your final equation in <answer> tags."
+            "content": f"Create an equation using only the numbers {numbers} that equals {target}. "
+                      f"Use each number once with +, -, *, or /. Do not include an equals sign in the answer."
         }
     ]
     
-    # continue_final_message 제거
     prompt = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
-        add_generation_prompt=True  # ← 이것으로 변경
+        add_generation_prompt=True
     )
     
     # Calculate token count
@@ -228,8 +223,8 @@ def main():
     parser.add_argument(
         "--model_name",
         type=str,
-        default="Qwen/Qwen2.5-1.5B-Instruct",
-        help="Model name for tokenizer (default: Qwen/Qwen2.5-1.5B-Instruct)"
+        default="Qwen/Qwen3-4B-Instruct",
+        help="Model name for tokenizer (default: Qwen/Qwen3-4B-Instruct)"
     )
     
     args = parser.parse_args()

@@ -6,10 +6,10 @@ model:
   name: "Qwen/Qwen3-4B"  # 4B 모델 + LoRA
   torch_dtype: "bfloat16"
   attn_implementation: "eager"  # Flash Attention 없음 - eager 사용
-  use_peft: true  # ✅ LoRA ON
+  use_peft: False  # ✅ LoRA ON
   load_in_4bit: false  # 양자화 끄기
   load_in_8bit: false  # 양자화 끄기
-  model_suffix: "4b_lora"  # 파일명에 추가할 suffix
+  model_suffix: "4b"  # 파일명에 추가할 suffix
 
 # PEFT/LoRA Configuration
 peft:
@@ -22,7 +22,7 @@ peft:
 # Training Arguments
 training:
   output_dir: "checkpoints/qwen-4b-lora"  # 4B LoRA 체크포인트
-  learning_rate: 5.0e-6  # LoRA는 더 높은 LR (5e-7 → 5e-6)
+  learning_rate: 5.0e-7  # LoRA는 더 높은 LR (5e-7 → 5e-6)
   lr_scheduler_type: "cosine"
   warmup_ratio: 0.1
   
@@ -61,7 +61,7 @@ training:
 grpo:
   # Prompt and completion length
   max_prompt_length: 256
-  max_completion_length: 512  # 1024→512 (microR1 스타일, 간결하게)
+  max_completion_length: 1024  # 1024→512 (microR1 스타일, 간결하게)
   
   # Generation parameters
   num_generations: 4  # 8→4 (4B는 4개로 충분)
@@ -81,7 +81,7 @@ grpo:
 dataset:
   name: "Jiayi-Pan/Countdown-Tasks-3to4"
   split: "train"
-  num_samples: 2500  # Reduced from 50k for faster training
+  num_samples: 4000  # Reduced from 50k for faster training
   test_size: 0.1
   shuffle_seed: 42
   

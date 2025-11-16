@@ -22,7 +22,7 @@ pkill -9 -f "python.*tensorboard"
 nvidia-smi 
 
 # 7. 기존 로그/체크포인트 삭제 (깨끗한 시작)
-rm -rf logs/tensorboard/* checkpoints/* completion_samples/*
+rm -rf logs/tensorboard/* checkpoints/* completion_samples/* logs/generation_samples/*
 
 # 8. TensorBoard 실행 (백그라운드)
 nohup uv run tensorboard --logdir=logs/tensorboard --port=6006 --host=0.0.0.0 > tensorboard.log 2>&1 &

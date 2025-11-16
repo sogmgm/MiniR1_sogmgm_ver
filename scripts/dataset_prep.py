@@ -34,6 +34,7 @@ from pathlib import Path
 from datasets import load_dataset
 from transformers import AutoTokenizer
 from tqdm import tqdm
+import yaml
 
 
 def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
@@ -57,7 +58,7 @@ def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
         {
             "role": "user",
             "content": f"Create an equation using only the numbers {numbers} that equals {target}. "
-                      f"Use each number once with +, -, *, or /. Do not include an equals sign in the answer."
+                       f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 = 1 </answer>."
         }
     ]
     
@@ -80,12 +81,12 @@ def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
 
 
 def prepare_dataset(
-    dataset_name: str = "Jiayi-Pan/Countdown-Tasks-3to4",
-    num_samples: int = 2500,
-    test_size: float = 0.1,
-    seed: int = 42,
-    output_dir: str = ".cache/datasets",
-    model_name: str = "Qwen/Qwen2.5-1.5B-Instruct"
+    dataset_name: str,
+    num_samples: int,
+    test_size: float,
+    seed: int,
+    output_dir: str,
+    model_name: str
 ):
     """
     Prepare and save Countdown dataset with R1 prompts
@@ -188,54 +189,73 @@ def prepare_dataset(
     print(f"  Metadata: {metadata_file}")
 
 
+def load_config(config_path: str = "configs/training_config.yaml") -> dict:
+    """Load training configuration from YAML file"""
+    with open(config_path, 'r', encoding='utf-8') as f:
+        return yaml.safe_load(f)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Prepare Countdown dataset for Mini-R1")
     parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/training_config.yaml",
+        help="Path to training config file (default: configs/training_config.yaml)"
+    )
+    parser.add_argument(
         "--dataset_name",
         type=str,
-        default="Jiayi-Pan/Countdown-Tasks-3to4",
-        help="HuggingFace dataset name"
+        default=None,
+        help="HuggingFace dataset name (overrides config)"
     )
     parser.add_argument(
         "--num_samples",
         type=int,
-        default=5000,
-        help="Number of samples to use (default: 5000)"
+        default=None,
+        help="Number of samples to use (overrides config)"
     )
     parser.add_argument(
         "--test_size",
         type=float,
-        default=0.1,
-        help="Fraction for test set (default: 0.1)"
+        default=None,
+        help="Fraction for test set (overrides config)"
     )
     parser.add_argument(
         "--seed",
         type=int,
-        default=42,
-        help="Random seed (default: 42)"
+        default=None,
+        help="Random seed (overrides config)"
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default=".cache/datasets",
-        help="Output directory (default: .cache/datasets)"
+        default=None,
+        help="Output directory (overrides config)"
     )
     parser.add_argument(
         "--model_name",
         type=str,
-        default="Qwen/Qwen3-4B-Instruct",
-        help="Model name for tokenizer (default: Qwen/Qwen3-4B-Instruct)"
+        default=None,
+        help="Model name for tokenizer (overrides config)"
     )
     
     args = parser.parse_args()
     
+    # Load config file
+    config = load_config(args.config)
+    
+    # Get model name from config (use as-is for tokenizer)
+    model_name = config['model']['name']
+    
+    # Command line args override config values
     prepare_dataset(
-        dataset_name=args.dataset_name,
-        num_samples=args.num_samples,
-        test_size=args.test_size,
-        seed=args.seed,
-        output_dir=args.output_dir,
-        model_name=args.model_name
+        dataset_name=args.dataset_name or config['dataset']['name'],
+        num_samples=args.num_samples or config['dataset']['num_samples'],
+        test_size=args.test_size or config['dataset']['test_size'],
+        seed=args.seed or config['dataset']['shuffle_seed'],
+        output_dir=args.output_dir or config['dataset']['cache_dir'],
+        model_name=args.model_name or model_name
     )
 
 

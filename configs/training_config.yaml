@@ -3,13 +3,13 @@
 
 # Model Configuration
 model:
-  name: "Qwen/Qwen3-4B"  # 4B 모델 + LoRA
+  name: "Qwen/Qwen3-1.7B"  # 4B 모델 + LoRA
   torch_dtype: "bfloat16"
   attn_implementation: "eager"  # Flash Attention 없음 - eager 사용
   use_peft: False  # ✅ LoRA ON
   load_in_4bit: false  # 양자화 끄기
   load_in_8bit: false  # 양자화 끄기
-  model_suffix: "4b"  # 파일명에 추가할 suffix
+  model_suffix: "1.7b"  # 파일명에 추가할 suffix
 
 # PEFT/LoRA Configuration
 peft:
@@ -21,15 +21,15 @@ peft:
 
 # Training Arguments
 training:
-  output_dir: "checkpoints/qwen-4b-lora"  # 4B LoRA 체크포인트
-  learning_rate: 5.0e-7  # LoRA는 더 높은 LR (5e-7 → 5e-6)
+  output_dir: "checkpoints/qwen-1.7b"  # 1.7B 체크포인트
+  learning_rate: 5.0e-7
   lr_scheduler_type: "cosine"
   warmup_ratio: 0.1
   
   # Steps and epochs
   max_steps: 500  # ✅ Full 학습
   logging_steps: 1  # 더 자주 로깅
-  save_steps: 50
+  save_steps: 100  # 100 step마다 체크포인트
   eval_steps: 50
   
   # Batch size configuration
@@ -50,7 +50,7 @@ training:
   weight_decay: 0.01
   
   # Logging
-  logging_dir: "logs/tensorboard_4b_lora"
+  logging_dir: "logs/tensorboard_1.7b"
   report_to: ["tensorboard"]
   
   # Checkpointing
@@ -61,7 +61,7 @@ training:
 grpo:
   # Prompt and completion length
   max_prompt_length: 256
-  max_completion_length: 1024  # 1024→512 (microR1 스타일, 간결하게)
+  max_completion_length: 1024  # 1024
   
   # Generation parameters
   num_generations: 4  # 8→4 (4B는 4개로 충분)

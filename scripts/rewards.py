@@ -138,10 +138,29 @@ def equation_reward_func(
             
             equation = match.group(1).strip()
             
-            # Step 2: Check for equals sign
+            # Step 2: Handle equation with or without '='
+            # If '=' exists, extract left (equation) and right (answer) parts
+            # Example: "75 - (47 - 43) = 71" -> left="75 - (47 - 43)", right="71"
             if '=' in equation:
-                rewards.append(0.0)
-                continue
+                parts = equation.split('=')
+                equation_part = parts[0].strip()
+                answer_part = parts[1].strip() if len(parts) > 1 else None
+                
+                # Verify the answer part matches target (optional check)
+                if answer_part:
+                    try:
+                        answer_value = float(answer_part)
+                        target_float = float(gt)
+                        # If answer part exists but doesn't match target, fail
+                        if abs(answer_value - target_float) >= 1e-5:
+                            rewards.append(0.0)
+                            continue
+                    except:
+                        # If answer part is not a valid number, ignore it
+                        pass
+                
+                # Use only the equation part for further validation
+                equation = equation_part
             
             # Step 3: Extract all numbers from equation
             used_numbers = []

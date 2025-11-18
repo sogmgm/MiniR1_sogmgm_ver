@@ -26,7 +26,7 @@ from transformers import (
 from trl import GRPOConfig, GRPOTrainer, ModelConfig, get_peft_config
 from peft import LoraConfig, prepare_model_for_kbit_training
 
-from rewards import format_reward_func, equation_reward_func
+from rewards import format_reward_func, equation_reward_func, efficiency_bonus_func
 
 
 # Setup logging
@@ -510,8 +510,12 @@ def main():
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=test_dataset,
-        peft_config=peft_config if use_peft else None,  # ✅ LoRA off시 None 전달
-        reward_funcs=[format_reward_func, equation_reward_func],
+        peft_config=peft_config if use_peft else None,
+        reward_funcs=[
+            format_reward_func,      # 포맷 점수 (0.0~1.5)
+            equation_reward_func,    # 수식 점수 (0 or 1)
+            efficiency_bonus_func,   # 효율성 (-0.2~0.3)
+        ],
     )
     
     trainer_creation_time = time.time() - trainer_creation_start

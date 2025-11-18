@@ -228,9 +228,7 @@ uv pip install flash-attn --no-build-isolation
 > 💡 **Tip**: RunPod pytorch 템플릿을 사용했다면 PyTorch CUDA가 이미 설치되어 있을 가능성이 높습니다.
 
 #### 4️⃣ Hugging Face 인증
-```bash
-# 방법 1: 대화형 로그인
-uv run huggingface-cli login
+
 
 # 방법 2: 토큰으로 로그인
 export HF_TOKEN="your_hf_token_here"
@@ -279,13 +277,6 @@ tensorboard --logdir=logs/tensorboard --host=0.0.0.0 --port=6006
 # 실시간 로그 확인
 tail -f training.log
 
-# 체크포인트 확인
-ls -lh checkpoints/qwen-r1-countdown/
-
-# 생성 샘플 확인
-cat completion_samples/step_0050_success.txt
-cat completion_samples/step_0100_success.txt
-```
 
 #### 🔟 평가 실행
 ```bash
@@ -295,26 +286,9 @@ uv run python scripts/evaluate.py \
   --num_samples 100
 ```
 
-### ⏱️ 전체 소요 시간 (RTX 4090 기준)
-- 환경 설정: ~10분
-- 데이터 준비: ~3분
-- 학습 (200 steps): ~3-4시간
-- 평가: ~5-10분
-- **총: 약 4시간**
 
 ## 💾 GPU 메모리 최적화 전략
 
-### 메모리 절감 기법
-
-| 설정 | 기본값 → 최적화 | 메모리 절감 | 성능 영향 |
-|------|----------------|------------|----------|
-| **모델 크기** | 3B → 1.5B | ~50% | 약간 감소 |
-| **양자화** | FP16 → 4-bit QLoRA | ~75% | 거의 없음 |
-| **Gradient Checkpointing** | False → True | ~30% | 10-15% 느림 |
-| **Batch Size** | 4 → 1 | ~75% | Grad Accum으로 보완 |
-| **Max Completion** | 1024 → 512 | ~30% | 충분함 |
-| **Flash Attention 2** | False → True | ~20% | 20% 빠름 |
-| **Num Generations** | 4 → 2 | ~50% | 약간 감소 |
 
 ### 실제 VRAM 사용량 (Qwen 1.5B 기준)
 
@@ -343,12 +317,6 @@ Peak:           ~16GB  ████████████████░░░
 ```bash
 tail -f training.log
 
-# 출력 예시:
-# Step 25/200 | Loss: 1.234 | Format: 0.45 | Equation: 0.12 | Combined: 0.57
-# Step 50/200 | Loss: 0.987 | Format: 0.82 | Equation: 0.23 | Combined: 1.05
-# Step 100/200 | Loss: 0.654 | Format: 0.95 | Equation: 0.38 | Combined: 1.33
-```
-
 ### 2️⃣ TensorBoard (선택적, 현재 활성화됨)
 
 #### TensorBoard 실행
@@ -365,7 +333,6 @@ tensorboard --logdir=logs/tensorboard --host=0.0.0.0 --port=6006
 📈 train/loss              - 학습 손실 (감소 추세 확인)
 📈 train/rewards/format    - 포맷 보상 (~50 steps에 0.9+)
 📈 train/rewards/equation  - 수식 보상 (~100 steps부터 증가)
-📈 train/rewards/combined  - 총 보상 (목표: 1.5-1.8)
 📈 train/learning_rate     - 학습률 (Cosine 감소)
 ```
 
@@ -374,21 +341,6 @@ tensorboard --logdir=logs/tensorboard --host=0.0.0.0 --port=6006
 # configs/training_config.yaml
 training:
   report_to: []  # ["tensorboard"] → []
-```
-
-### 3️⃣ 생성 샘플 확인
-```bash
-# 25 step마다 자동 저장
-ls -lh completion_samples/
-
-# 성공 샘플 확인
-cat completion_samples/step_0050_success.txt
-cat completion_samples/step_0100_success.txt
-cat completion_samples/step_0150_success.txt
-cat completion_samples/step_0200_success.txt
-
-# 전체 샘플 확인 (성공+실패)
-cat completion_samples/step_0200_all.txt
 ```
 
 ### 4️⃣ 체크포인트 관리
@@ -404,45 +356,6 @@ checkpoints/qwen-r1-countdown/
 # 오래된 체크포인트 자동 삭제됨
 ```
 
-### 5️⃣ 학습 중단 및 재개
-```bash
-# 중단된 학습 재개 (자동으로 마지막 체크포인트부터)
-uv run python scripts/train_grpo.py \
-  --config configs/training_config.yaml \
-  --resume_from_checkpoint checkpoints/qwen-r1-countdown/checkpoint-100
-```
-
-### 6️⃣ PROGRESS.md 업데이트
-```bash
-# 학습 진행사항 수동 기록 (선택적)
-# - 각 체크포인트별 성공률
-# - 생성 샘플 예시
-# - GPU 메모리 사용량
-# - 특이사항 메모
-```
-
-## 📝 주요 특징 및 제한사항
-
-### ✅ 경량화 최적화
-- **작은 데이터셋**: 5k 샘플 (원본 50k 대비 90% 감소)
-- **짧은 학습**: 200 steps (원본 450 steps 대비 55% 감소)
-- **작은 모델**: 1.5B/3B (메모리 효율)
-- **메모리 최적화**: 4-bit QLoRA + Flash Attention
-- **배치 최적화**: Batch size 1 + Gradient Accumulation
-
-### ✅ RunPod 친화적
-- **UV 패키지 관리**: 빠른 의존성 설치
-- **단일 GPU 최적화**: 12-16GB VRAM에서 실행 가능
-- **자동 체크포인트**: 50 step마다 자동 저장
-- **중단/재개 지원**: 언제든지 중단 후 이어서 학습 가능
-- **샘플 자동 저장**: 25 step마다 생성 샘플 저장
-
-### ⚠️ 제한사항
-- **단일 GPU 전용**: Multi-GPU / Distributed Training 미지원
-- **메모리 한계**: 16GB VRAM 미만 GPU는 Qwen 1.5B 권장
-- **학습 시간**: RTX 4090 기준 3-4시간 소요
-- **성능 상한**: Countdown Game에 특화 (범용성 제한)
-- **TensorBoard**: 활성화 시 약간의 메모리 오버헤드 (~500MB)
 
 ### 🔄 확장 가능성
 - [ ] Multi-GPU 지원 (DDP/FSDP)
@@ -460,64 +373,26 @@ uv run python scripts/train_grpo.py \
 │  학습 단계별 모델 행동 변화                                        │
 └──────────────────────────────────────────────────────────────────┘
 
-Step 0-50: 형식 학습 단계
-───────────────────────────────────────
-보상: Format 0.0 → 0.8-0.9
-      Equation 0.0 → 0.05-0.10
+Step 0-50: 포맷 학습
+Format Reward: 0.0 → 0.8-0.9
+Equation Reward: 0.0 → 0.05-0.10
+주요 학습: <think></think><answer></answer> 구조
 
-모델 행동:
-  ❌ "The answer is 55 + 36"
-  ❌ "<think> Let me <think> ..."  (중첩 태그)
-  ✅ "... </think>\n<answer> 55 + 36 </answer>"
+Step 50-100: 초기 추론
+Format Reward: 0.9+
+Equation Reward: 0.10 → 0.20
+주요 학습: 간단한 수식 생성
 
-핵심: <think></think><answer></answer> 구조 학습
+Step 100-150: 패턴 인식
+Format Reward: 0.95+
+Equation Reward: 0.20 → 0.35
+주요 학습: 숫자 조합 패턴
 
+Step 150-200: 수렴
+Format Reward: 0.95+
+Equation Reward: 0.35 → 0.45
+주요 학습: 안정적 추론 능력
 
-Step 50-100: 초기 추론 단계
-───────────────────────────────────────
-보상: Format 0.9+
-      Equation 0.10 → 0.20
-
-모델 행동:
-  ✅ 형식은 거의 완벽
-  ⚠️ 수식은 종종 틀림
-  예: "55 + 36 + 7 + 19" (= 117, 목표 65)
-  예: "55 - 36" (일부 숫자만 사용)
-
-핵심: 간단한 수식 생성 시작
-
-
-Step 100-150: 패턴 인식 단계
-───────────────────────────────────────
-보상: Format 0.95+
-      Equation 0.20 → 0.35
-
-모델 행동:
-  ✅ 모든 숫자 사용하기 시작
-  ✅ 목표값에 가까운 수식 생성
-  ⚠️ 아직 완벽하지 않음
-  예: "55 + 36 - 7 - 20" (근사값)
-
-핵심: 숫자 조합 패턴 학습
-
-
-Step 150-200: 수렴 단계
-───────────────────────────────────────
-보상: Format 0.95+
-      Equation 0.35 → 0.45
-
-모델 행동:
-  ✅ 안정적인 형식
-  ✅ 40-50% 정확도
-  ✅ 추론 과정 개선
-  예: "<think> 
-       First, 55 + 36 = 91
-       Then, 91 - 7 = 84
-       Finally, 84 - 19 = 65
-       </think>
-       <answer> 55 + 36 - 7 - 19 </answer>"
-
-핵심: 안정적 추론 능력 확보
 ```
 
 ### 최종 성능 예상
@@ -714,67 +589,4 @@ git clone https://github.com/YOUR_USERNAME/MiniR1.git
 
 # 2. 브랜치 생성
 git checkout -b feature/your-feature
-
-# 3. 변경 사항 커밋
-git commit -m "Add: your feature description"
-
-# 4. Push 및 PR
-git push origin feature/your-feature
-```
-
-### 개선 아이디어
-- [ ] Multi-GPU 지원 추가
-- [ ] 다른 수학 데이터셋 실험 (GSM8K, MATH)
-- [ ] 보상 함수 개선 (부분 점수, Curriculum Learning)
-- [ ] Wandb 통합
-- [ ] Docker 컨테이너 제공
-- [ ] 자동 하이퍼파라미터 튜닝
-
-### 📄 라이선스
-MIT License - 자유롭게 사용, 수정, 배포 가능
-
-### 📧 연락처
-- GitHub Issues: 버그 리포트 및 기능 요청
-- Discussions: 질문 및 토론
-
----
-
-## 🎉 시작하기
-
-```bash
-# 1. RunPod Pod 생성 (RTX 4090 권장)
-# 2. 터미널 접속
-cd /workspace
-
-# 3. 빠른 시작
-git clone https://github.com/sogmgm/MiniR1_sogmgm_ver.git
-cd MiniR1_sogmgm_ver
-
-# 4. UV 설치
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.local/bin/env
-
-# 5. 의존성 설치
-uv sync --no-install-project
-
-# 6. PyTorch 확인 (필요시 CUDA 버전 설치)
-uv run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
-# False 나오면: uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# 7. 데이터 준비
-uv run python scripts/dataset_prep.py --num_samples 5000
-
-# 8. 학습 시작
-uv run python scripts/train_grpo.py --config configs/training_config.yaml
-
-# 9. 학습 모니터링
-tail -f training.log
-
-# 10. 완료! 🎊
-```
-
-**예상 소요 시간**: 4시간 | **예상 비용**: $2.50
-
-좋은 실험 되세요! 🚀
-
 

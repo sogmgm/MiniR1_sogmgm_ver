@@ -109,3 +109,4 @@ tmp/
 temp/
 *.tmp
 RUNPOD_SETUP_OLD.md
+logs/generation_samples/

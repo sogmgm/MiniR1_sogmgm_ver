@@ -3,13 +3,13 @@
 
 # Model Configuration
 model:
-  name: "Qwen/Qwen3-1.7B"  # 4B 모델 + LoRA
+  name: "Qwen/Qwen2.5-3B-Instruct"  # 4B 모델 + LoRA
   torch_dtype: "bfloat16"
   attn_implementation: "eager"  # Flash Attention 없음 - eager 사용
   use_peft: False  # ✅ LoRA ON
   load_in_4bit: false  # 양자화 끄기
   load_in_8bit: false  # 양자화 끄기
-  model_suffix: "1.7b_v3"  # 파일명에 추가할 suffix
+  model_suffix: "2.5_3b"  # 파일명에 추가할 suffix
 
 # PEFT/LoRA Configuration
 peft:
@@ -21,15 +21,15 @@ peft:
 
 # Training Arguments
 training:
-  output_dir: "checkpoints/qwen-1.7b"  # 1.7B 체크포인트
-  learning_rate: 5.0e-7
-  lr_scheduler_type: "constant"  # Cosine에서 Constant로 변경
-  warmup_ratio: 0.0  # Warmup 제거
+  output_dir: "checkpoints/qwen2.5-3B"  # 3b 체크포인트
+  learning_rate: 5.0e-6
+  lr_scheduler_type: "cosine"  # Cosine에서 Constant로 변경
+  warmup_ratio: 0.05  # Warmup 제거
   
   # Steps and epochs
-  max_steps: 360  # ✅ Full 학습
+  max_steps: 300  # ✅ Full 학습
   logging_steps: 1  # 더 자주 로깅
-  save_steps: 100  # 100 step마다 체크포인트
+  save_steps: 300  # 100 step마다 체크포인트
   eval_steps: 50
   
   # Batch size configuration
@@ -50,7 +50,7 @@ training:
   weight_decay: 0.01
   
   # Logging
-  logging_dir: "logs/tensorboard_1.7b"
+  logging_dir: "logs/tensorboard_qwen2.5-3B"
   report_to: ["tensorboard"]
   
   # Checkpointing
@@ -74,7 +74,7 @@ grpo:
   use_cache: true
   
   # GRPO hyperparameters
-  beta: 0.001
+  beta: 0.01
   reward_scale: 10.0
 
 # Dataset Configuration
@@ -90,14 +90,9 @@ dataset:
 
 # Reward Functions
 rewards:
-  # Format reward weight
   format_weight: 1.0
-  
-  # Equation correctness weight
   equation_weight: 1.0
-  
-  # Combined reward type: "sum" or "product"
-  combination: "sum"  # Reverted - trainer handles them separately
+  efficiency_weight: 0.5  # ✨ 추가 필요
 
 # Generation Sampling Configuration
 sampling:

@@ -9,7 +9,7 @@ model:
   use_peft: False  # ✅ LoRA ON
   load_in_4bit: false  # 양자화 끄기
   load_in_8bit: false  # 양자화 끄기
-  model_suffix: "1.7b"  # 파일명에 추가할 suffix
+  model_suffix: "1.7b_v3"  # 파일명에 추가할 suffix
 
 # PEFT/LoRA Configuration
 peft:
@@ -23,11 +23,11 @@ peft:
 training:
   output_dir: "checkpoints/qwen-1.7b"  # 1.7B 체크포인트
   learning_rate: 5.0e-7
-  lr_scheduler_type: "cosine"
-  warmup_ratio: 0.1
+  lr_scheduler_type: "constant"  # Cosine에서 Constant로 변경
+  warmup_ratio: 0.0  # Warmup 제거
   
   # Steps and epochs
-  max_steps: 500  # ✅ Full 학습
+  max_steps: 360  # ✅ Full 학습
   logging_steps: 1  # 더 자주 로깅
   save_steps: 100  # 100 step마다 체크포인트
   eval_steps: 50

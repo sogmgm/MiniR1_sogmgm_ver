@@ -1,24 +1,26 @@
 """
-Reward Functions for Mini-R1 GRPO Training (Revised)
-Focus: Prioritize Math Correctness over Format/Length
+Reward Functions for Mini-R1 GRPO Training
 """
 
 import re
 from typing import List
 import ast
 import operator
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def format_reward_func(
-    prompts: List[str],              # ✅ 추가 (필수)
+    prompts: List[str],
     completions: List[str],
-    completion_ids: List[List[int]], # ✅ 추가 (필수)
-    target: List[int] = None,        # ✅ 수정: List[str] -> List[int]
+    completion_ids: List[List[int]],
     **kwargs
 ) -> List[float]:
     """
-    형식 점수 (비중 축소)
-    
-    최대: 0.5점
+    형식 점수
+    - <think>...</think> <answer>...</answer> 구조 확인
+    - 최대: 0.5점
     """
     rewards = []
     
@@ -49,7 +51,8 @@ def format_reward_func(
             
             rewards.append(score)
                 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Format reward error: {e}")
             rewards.append(0.0)
     
     return rewards
@@ -57,8 +60,8 @@ def format_reward_func(
 
 def safe_eval(expr: str) -> float:
     """
-    안전한 수식 계산 (eval 대신 AST 사용)
-    허용된 연산자: +, -, *, /, ( )
+    안전한 수식 계산
+    허용된 연산자: +, -, *, /
     """
     allowed_operators = {
         ast.Add: operator.add,
@@ -97,23 +100,29 @@ def safe_eval(expr: str) -> float:
 
 
 def equation_reward_func(
-    prompts: List[str],              # ✅ 추가 (필수)
+    prompts: List[str],
     completions: List[str],
-    completion_ids: List[List[int]], # ✅ 추가 (필수)
-    target: List[int],               # ✅ 수정: List[str] -> List[int], nums 매개변수명 변경
-    nums: List[List[int]],
+    completion_ids: List[List[int]],
     **kwargs
 ) -> List[float]:
     """
     수식 정확도 리워드
-    
     - 정답: 2.0점
-    - 오답이지만 수식 형태는 갖춤: 0.1점
+    - 숫자는 맞게 사용했지만 오답: 0.1점
+    - 그 외: 0.0점
     """
+    target = kwargs.get('target', [])
+    nums = kwargs.get('nums', [])
+    
+    if not target or not nums:
+        logger.warning("Missing target or nums in equation_reward_func")
+        return [0.0] * len(completions)
+    
     rewards = []
     
     for completion, gt, numbers in zip(completions, target, nums):
         try:
+            # <answer> 태그 내용 추출
             match = re.search(r"<answer>(.*?)</answer>", completion, re.DOTALL)
             if match is None:
                 rewards.append(0.0)
@@ -125,50 +134,55 @@ def equation_reward_func(
                 rewards.append(0.0)
                 continue
             
+            # = 기호 있으면 왼쪽만 추출
             if '=' in equation:
                 equation = equation.split('=')[0].strip()
             
+            # 허용된 문자만 있는지 검증
             allowed_pattern = r'^[\d+\-*/().\s]+$'
             if not re.match(allowed_pattern, equation):
                 rewards.append(0.0)
                 continue
 
+            # 사용된 숫자 검증
             tokens = re.findall(r'\d+', equation)
             used_numbers = sorted([int(t) for t in tokens])
             expected_numbers = sorted(numbers)
             
             if used_numbers != expected_numbers:
-                rewards.append(0.1)
+                rewards.append(0.1)  # 숫자를 잘못 사용
                 continue
             
+            # 수식 계산
             try:
                 result = safe_eval(equation)
                 if abs(float(result) - float(gt)) < 1e-5:
-                    rewards.append(2.0)
+                    rewards.append(2.0)  # 정답!
                 else:
-                    rewards.append(0.1)
+                    rewards.append(0.1)  # 숫자는 맞지만 계산 오류
             except (ValueError, ZeroDivisionError, SyntaxError):
                 rewards.append(0.0)
                 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Equation reward error: {e}")
             rewards.append(0.0)
     
     return rewards
 
 
 def length_penalty_func(
-    prompts: List[str],              # ✅ 추가 (필수)
+    prompts: List[str],
     completions: List[str],
-    completion_ids: List[List[int]], # ✅ 추가 (필수)
-    target: List[int] = None,
-    max_completion_length: int = 2048,
+    completion_ids: List[List[int]],
     **kwargs
 ) -> List[float]:
     """
     길이 페널티
-    
-    max_completion_length를 넘으면 -0.5 페널티
+    - 1536 토큰 초과 시: -0.5점
+    - 그 외: 0.0점
     """
+    max_completion_length = kwargs.get('max_completion_length', 1536)
+    
     rewards = []
     safe_buffer = 100
     
@@ -179,5 +193,5 @@ def length_penalty_func(
             rewards.append(0.0)
         else:
             rewards.append(-0.5)
-            
+    
     return rewards

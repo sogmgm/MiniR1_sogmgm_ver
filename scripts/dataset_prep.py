@@ -58,7 +58,7 @@ def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
         {
             "role": "user",
             "content": f"Create an equation using only the numbers {numbers} that equals {target}. "
-                       f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 = 1 </answer>."
+                       f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, * or /) and each number should only be used once. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags"
         }
     ]
     

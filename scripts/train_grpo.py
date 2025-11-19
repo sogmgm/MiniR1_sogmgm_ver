@@ -116,7 +116,7 @@ class SampleSavingCallback(TrainerCallback):
         try:
             was_training = model.training
             model.eval()
-
+    
             # 샘플 데이터 준비
             if self.eval_dataset and len(self.eval_dataset) > 0:
                 sample = self.eval_dataset[random.randint(0, len(self.eval_dataset)-1)]
@@ -125,14 +125,15 @@ class SampleSavingCallback(TrainerCallback):
             else:
                 numbers = random.sample(range(1, 101), 6)
                 target = random.randint(10, 999)
-
+    
             # 프롬프트 생성
             messages = [
                 {"role": "system", "content": "Respond in the following format: <think> ... </think> <answer> ... </answer>"},
-                {"role": "user", "content": f"Create an equation using only the numbers {numbers} that equals {target}. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags."}
+                {"role": "user", "content":  f"Create an equation using only the numbers {numbers} that equals {target}. "
+                       f"Using the numbers {numbers}, create an equation that equals {target}. You can use basic arithmetic operations (+, -, * or /) and each number should only be used once. Show your work in <think> </think> tags. And return the final equation and answer in <answer> </answer> tags"}
             ]
             prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-
+    
             # 생성
             inputs = self.tokenizer(prompt, return_tensors="pt").to(model.device)
             with torch.no_grad():
@@ -146,28 +147,46 @@ class SampleSavingCallback(TrainerCallback):
             
             full_output = self.tokenizer.decode(outputs[0], skip_special_tokens=False)
             completion = full_output[len(prompt):]
-
-            # === [수정] max_completion_length 전달 ===
-            raw_format = format_reward_func([completion], [target])[0]
-            raw_equation = equation_reward_func([completion], [target], [numbers])[0]
+    
+            # === [수정] GRPOTrainer가 호출하는 것과 동일한 방식으로 호출 ===
+            # prompts, completions, completion_ids를 모두 리스트로 전달
+            prompts = [prompt]
+            completions = [completion]
+            completion_ids = [inputs['input_ids'][0].tolist()]  # 실제 토큰 ID
+            
+            raw_format = format_reward_func(
+                prompts,
+                completions,
+                completion_ids
+            )[0]
+            
+            raw_equation = equation_reward_func(
+                prompts,
+                completions,
+                completion_ids,
+                target=[target],
+                nums=[numbers]
+            )[0]
+            
             raw_length = length_penalty_func(
-                [completion], 
-                [target], 
+                prompts,
+                completions,
+                completion_ids,
                 max_completion_length=self.max_completion_length
             )[0]
-
+    
             # 가중치 적용
             w_format = raw_format * self.weights['format']
             w_equation = raw_equation * self.weights['equation']
             w_length = raw_length * self.weights['length']
             
             total_reward = w_format + w_equation + w_length
-
+    
             # 파일 저장
             samples_dir = Path("logs/generation_samples")
             samples_dir.mkdir(parents=True, exist_ok=True)
             sample_file = samples_dir / f"step_{step:05d}.txt"
-
+    
             with open(sample_file, 'w', encoding='utf-8') as f:
                 f.write(f"Step: {step}\nTarget: {target}, Nums: {numbers}\n")
                 f.write(f"Generated:\n{completion}\n\n")
@@ -176,13 +195,12 @@ class SampleSavingCallback(TrainerCallback):
                 f.write(f"Equation: {w_equation:.2f} (Raw: {raw_equation:.2f} * {self.weights['equation']})\n")
                 f.write(f"Length:   {w_length:.2f} (Raw: {raw_length:.2f} * {self.weights['length']})\n")
                 f.write(f"Total:    {total_reward:.2f}\n")
-
+    
             if was_training: model.train()
             logger.info(f"✅ Step {step} Sample Saved. Total Reward: {total_reward:.2f}")
-
+    
         except Exception as e:
             logger.error(f"Sample generation failed: {e}")
-
 
 def main():
     parser = argparse.ArgumentParser()

@@ -3,85 +3,82 @@
 
 # Model Configuration
 model:
-  name: "Qwen/Qwen2.5-3B-Instruct"  # 4B 모델 + LoRA
+  name: "Qwen/Qwen2.5-3B-Instruct" 
   torch_dtype: "bfloat16"
   attn_implementation: "eager"  # Flash Attention 없음 - eager 사용
-  use_peft: False  # ✅ LoRA ON
-  load_in_4bit: false  # 양자화 끄기
-  load_in_8bit: false  # 양자화 끄기
-  model_suffix: "2.5_3b"  # 파일명에 추가할 suffix
+  use_peft: False
+  load_in_4bit: false
+  load_in_8bit: false
+  model_suffix: "2.5_3b"
 
 # PEFT/LoRA Configuration
 peft:
   r: 64  # rank 증가 (32→64, 4B에 맞춤)
-  lora_alpha: 128  # alpha = 2*r
+  lora_alpha: 128
   lora_dropout: 0.05
   target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
   task_type: "CAUSAL_LM"
 
 # Training Arguments
 training:
-  output_dir: "checkpoints/qwen2.5-3B"  # 3b 체크포인트
+  output_dir: "checkpoints/qwen2.5-3B"
   learning_rate: 5.0e-6
-  lr_scheduler_type: "cosine"  # Cosine에서 Constant로 변경
-  warmup_ratio: 0.05  # Warmup 제거
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.05
   
   # Steps and epochs
-  max_steps: 300  # ✅ Full 학습
-  logging_steps: 1  # 더 자주 로깅
-  save_steps: 300  # 100 step마다 체크포인트
+  max_steps: 2000 
+  logging_steps: 5
+  save_steps: 1000
   eval_steps: 50
   
   # Batch size configuration
-  per_device_train_batch_size: 1
+  per_device_train_batch_size: 4
   per_device_eval_batch_size: 1
-  gradient_accumulation_steps: 4  # 8→4 (4B+LoRA는 메모리 여유)
+  gradient_accumulation_steps: 4
   
   # Memory optimization
   gradient_checkpointing: true
   gradient_checkpointing_kwargs:
     use_reentrant: false
-  bf16: true  # A40은 bfloat16 하드웨어 가속 지원
+  bf16: true
   fp16: false
   
   # Training stability
-  max_grad_norm: 1.0  # 0.5→1.0 (LoRA는 더 크게)
+  max_grad_norm: 0.5
   optim: "adamw_torch"
   weight_decay: 0.01
   
   # Logging
-  logging_dir: "logs/tensorboard_qwen2.5-3B"
+  logging_dir: "logs/tensorboard_qwen2.5-3B_25112"
   report_to: ["tensorboard"]
   
   # Checkpointing
-  save_total_limit: 2  # 4→2 (체크포인트 크기 때문)
+  save_total_limit: 2
   load_best_model_at_end: false
 
 # GRPO Specific Parameters
 grpo:
-  # Prompt and completion length
-  max_prompt_length: 256
-  max_completion_length: 1024  # 1024
+  max_prompt_length: 512
+  max_completion_length: 2048
   
   # Generation parameters
-  num_generations: 4  # 8→4 (4B는 4개로 충분)
-  temperature: 0.7
-  top_p: 0.9
-  top_k: 50
+  num_generations: 8
+  temperature: 0.9
+  top_p: 0.95
   
   # ✅ 추가: EOS 토큰 생성 시 즉시 중단
   # (answer 태그 닫힌 후 더 이상 생성 안 함)
-  use_cache: true
+  use_cache: False
   
   # GRPO hyperparameters
   beta: 0.01
-  reward_scale: 10.0
 
 # Dataset Configuration
 dataset:
   name: "Jiayi-Pan/Countdown-Tasks-3to4"
   split: "train"
-  num_samples: 4000  # Reduced from 50k for faster training
+  num_samples: 4000 
   test_size: 0.1
   shuffle_seed: 42
   
@@ -89,16 +86,17 @@ dataset:
   cache_dir: ".cache/datasets"
 
 # Reward Functions
-rewards:
-  format_weight: 1.0
-  equation_weight: 1.0
-  efficiency_weight: 0.5  # ✨ 추가 필요
+reward_weights:
+  format_reward: 1.0       # 포맷 점수 가중치 (기본값: 1.0)
+  equation_reward: 1.0     # 수식 정답 점수 가중치 (기본값: 1.0)
+  length_penalty: 1.0      # 길이 페널티 가중치 (기본값: 1.0) -> 2.0으로 하면 페널티가 2배
+
 
 # Generation Sampling Configuration
 sampling:
-  save_samples_every: 5  # Save samples every N steps (더 자주 체크)
-  num_samples_to_save: 10  # Number of samples to save per checkpoint
-  save_successful_only: false  # Also save failed attempts for debugging
+  save_samples_every: 5
+  num_samples_to_save: 10
+  save_successful_only: false
 
 # RunPod Specific Settings
 runpod:
@@ -110,7 +108,7 @@ runpod:
   
   # Automatic checkpoint upload to HF Hub
   push_to_hub: false
-  hub_model_id: null  # Set your HF username/model-name if pushing
+  hub_model_id: null
 
 # Evaluation Configuration
 evaluation:

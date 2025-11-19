@@ -33,7 +33,7 @@ training:
   eval_steps: 50
   
   # Batch size configuration
-  per_device_train_batch_size: 4
+  per_device_train_batch_size: 2
   per_device_eval_batch_size: 1
   gradient_accumulation_steps: 4
   
@@ -59,8 +59,8 @@ training:
 
 # GRPO Specific Parameters
 grpo:
-  max_prompt_length: 512
-  max_completion_length: 2048
+  max_prompt_length: 256
+  max_completion_length: 1536
   
   # Generation parameters
   num_generations: 8

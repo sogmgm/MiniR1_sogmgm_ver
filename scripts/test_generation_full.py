@@ -15,7 +15,7 @@ def test_generation_complete():
     print("🔧 LOADING MODEL...")
     print("="*80)
     
-    model_name = "Qwen/Qwen2.5-1.5B-Instruct"
+    model_name = "Qwen/Qwen2.5-3B-Instruct"
     
     # 1. 토크나이저 로드
     tokenizer = AutoTokenizer.from_pretrained(

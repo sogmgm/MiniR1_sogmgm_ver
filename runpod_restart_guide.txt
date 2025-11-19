@@ -1,53 +1,54 @@
-# 1. 작업 디렉토리로 이동
+#############################################
+# RunPod 재시작 간단 가이드 (Restart Guide) #
+#############################################
+
+목적: Pod 재시작 후 최소 단계로 Mini-R1 학습을 재개하거나 초기화합니다.
+실험 환경: NVIDIA A100 80GB 단일 GPU (전체 2000 steps 학습 예상 10~12시간)
+
+---
+1) 기본 재시작 (환경 정상, 데이터/체크포인트 유지)
+-----------------------------------------------
 cd /workspace/MiniR1_sogmgm_ver
-
-# 2. 최신 코드 받기 (로컬에서 수정한 내용)
-git pull
-
-# 3. HuggingFace 토큰 설정 (처음 한 번만)
-export HF_TOKEN="your_token_here"
-huggingface-cli login --token $HF_TOKEN
-
-# 4. 환경 확인
+source $HOME/.local/bin/env   # UV 환경 로드
+git pull                      # 코드 최신화 (필요시)
+export HF_TOKEN="your_token_here"  # 첫 실행만
 uv run python scripts/check_environment.py
 
-# 5. 데이터셋 준비 (새 프롬프트로)
-uv run python scripts/dataset_prep.py
+# (선택) GPU 메모리 정리
+pkill -f train_grpo || true
+pkill -f tensorboard || true
+uv run python -c "import torch; torch.cuda.empty_cache(); print('✓ cache cleared')"
 
-# 6. 실행중인 모든 프로세스 종료 및 GPU 메모리 초기화
-pkill -f tensorboard
-pkill -f train_grpo
-pkill -9 -f "python.*train_grpo"
-pkill -9 -f "python.*tensorboard"
-uv run python -c "import torch; torch.cuda.empty_cache(); torch.cuda.synchronize(); print('✓ GPU memory reset')"
+# 학습 재개 (가장 최근 체크포인트)
+nohup uv run python scripts/train_grpo.py \
+	--config configs/training_config.yaml \
+	--resume_from_checkpoint checkpoints/qwen2.5-3B/checkpoint-1000 \
+	> training.log 2>&1 &
 
-nvidia-smi 
-
-# 7. 기존 로그/체크포인트 삭제 (깨끗한 시작)
-rm -rf logs/tensorboard/* checkpoints/* completion_samples/* logs/generation_samples/*
-
-# 8. TensorBoard 실행 (백그라운드)
-nohup uv run tensorboard --logdir=logs/tensorboard --port=6006 --host=0.0.0.0 > tensorboard.log 2>&1 &
-
-# 9. 학습 시작 (백그라운드)
-nohup uv run python scripts/train_grpo.py --config configs/training_config.yaml > training.log 2>&1 &
-
-# 10. 학습 로그 모니터링
+# TensorBoard (로그 디렉토리: training_config.yaml 의 logging_dir)
+nohup tensorboard --logdir=logs/tensorboard_qwen2.5-3B_25112 --host=0.0.0.0 --port=6006 > tensorboard.log 2>&1 &
 tail -f training.log
 
-# 11. TensorBoard 접속 (로컬 PC에서)
-# RunPod 대시보드에서 포트 6006 포워딩 후
-# 브라우저: http://localhost:6006
+---
+2) 데이터셋 재생성 필요할 때 (프롬프트 변경 등)
+-----------------------------------------------
+rm -rf .cache/datasets/
+uv run python scripts/dataset_prep.py --config configs/training_config.yaml
 
-----
-<간이 버전 - 완전 초기화>
-cd /workspace/MiniR1_sogmgm_ver
-pkill -f tensorboard && pkill -f train_grpo && pkill -9 -f "python.*train_grpo" && pkill -9 -f "python.*tensorboard" && \
-uv run python scripts/dataset_prep.py && \
-rm -rf logs/tensorboard/* checkpoints/* completion_samples/* && \
-nohup uv run tensorboard --logdir=logs/tensorboard --port=6006 --host=0.0.0.0 > tensorboard.log 2>&1 & \
+# 새 데이터로 처음부터 학습(체크포인트 삭제 권장)
+rm -rf checkpoints/qwen2.5-3B/* logs/generation_samples/*
+nohup uv run python scripts/train_grpo.py --config configs/training_config.yaml > training.log 2>&1 &
+tail -f training.log
+
+---
+3) 완전 초기화 올인원(one-liner)
+--------------------------------
+cd /workspace/MiniR1_sogmgm_ver && \
+pkill -f train_grpo || true && pkill -f tensorboard || true && \
+uv run python scripts/dataset_prep.py --config configs/training_config.yaml && \
+rm -rf checkpoints/qwen2.5-3B/* logs/generation_samples/* && \
+nohup tensorboard --logdir=logs/tensorboard_qwen2.5-3B_25112 --host=0.0.0.0 --port=6006 > tensorboard.log 2>&1 & \
 nohup uv run python scripts/train_grpo.py --config configs/training_config.yaml > training.log 2>&1 & \
 tail -f training.log
 
-# GPU 메모리만 빠르게 초기화
-pkill -9 -f "python.*train_grpo" && pkill -9 -f "python.*tensorboard" && nvidia-smi
+---

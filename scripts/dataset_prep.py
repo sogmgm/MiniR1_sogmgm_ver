@@ -49,7 +49,7 @@ def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
     Returns:
         Dictionary with prompt and metadata
     """
-    # Simple prompt - microR1 style
+    # Simple prompt 
     messages = [
         {
             "role": "system",

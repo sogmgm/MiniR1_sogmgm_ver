@@ -39,7 +39,7 @@ import yaml
 
 def generate_r1_prompt(numbers: list, target: int, tokenizer) -> dict:
     """
-    Generate R1-style prompt - microR1 style (simple and clear)
+    Generate R1-style prompt
     
     Args:
         numbers: List of available numbers

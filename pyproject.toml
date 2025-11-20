@@ -14,7 +14,8 @@ dependencies = [
     "trl>=0.14.0",
     # Model optimization
     "peft>=0.14.0",
-    "bitsandbytes>=0.45.0",
+    # bitsandbytes: Linux/Windows 전용. macOS arm64에서는 설치 실패하므로 조건부 설치.
+    "bitsandbytes>=0.45.0; sys_platform != 'darwin'",
     # Utilities
     "huggingface-hub>=0.26.0",
     "hf-transfer>=0.1.8",
